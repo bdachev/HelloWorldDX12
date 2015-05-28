@@ -185,44 +185,48 @@ namespace HelloWorld
             descriptorsHeaps[0] = descriptorHeapCB;
             var assembly = typeof(HelloWorld).Assembly;
 
-            var descrTable = new[]
-            {
-                new DescriptorRange
-                {
-                    BaseShaderRegister = 0,
-                    DescriptorCount = 1,
-                    RangeType = DescriptorRangeType.ConstantBufferView,
-                    RegisterSpace = 0,
-                    OffsetInDescriptorsFromTableStart = 0,
-                }
-            };
-            var descrTableBuf = Collect(DataBuffer.Create(descrTable));
-
-            var rootParams = new[]
-            {
-                //new RootParameter
-                //{
-                //    ParameterType = RootParameterType.ConstantBufferView,
-                //    ShaderVisibility = ShaderVisibility.Vertex,
-                //    Descriptor = new RootDescriptor
-                //    {
-                //        ShaderRegister = 0,
-                //        RegisterSpace = 0,
-                //    }
-                //},
-                new RootParameter
-                {
-                    ParameterType = RootParameterType.DescriptorTable,
-                    ShaderVisibility = ShaderVisibility.Vertex,
-                    DescriptorTable = new RootDescriptorTable
-                    {
-                        DescriptorRangeCount = 1,
-                        PDescriptorRanges = descrTableBuf.DataPointer,
-                    }
-                }
-            };
-            var rsd = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rootParams);
-            rootSignature = Collect(device.CreateRootSignature(rsd.Serialize()));
+            //var descrTable = new[]
+            //{
+            //    new DescriptorRange
+            //    {
+            //        BaseShaderRegister = 0,
+            //        DescriptorCount = 1,
+            //        RangeType = DescriptorRangeType.ConstantBufferView,
+            //        RegisterSpace = 0,
+            //        OffsetInDescriptorsFromTableStart = 0,
+            //    }
+            //};
+            //using (var descrTableBuf = DataBuffer.Create(descrTable))
+            //{
+            //    var rootParams = new[]
+            //    {
+            //        //new RootParameter
+            //        //{
+            //        //    ParameterType = RootParameterType.ConstantBufferView,
+            //        //    ShaderVisibility = ShaderVisibility.Vertex,
+            //        //    Descriptor = new RootDescriptor
+            //        //    {
+            //        //        ShaderRegister = 0,
+            //        //        RegisterSpace = 0,
+            //        //    }
+            //        //},
+            //        new RootParameter
+            //        {
+            //            ParameterType = RootParameterType.DescriptorTable,
+            //            ShaderVisibility = ShaderVisibility.Vertex,
+            //            DescriptorTable = new RootDescriptorTable
+            //            {
+            //                DescriptorRangeCount = 1,
+            //                PDescriptorRanges = descrTableBuf.DataPointer,
+            //            }
+            //        }
+            //    };
+            //    var rsd = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rootParams);
+            //    rootSignature = Collect(device.CreateRootSignature(rsd.Serialize()));
+            //}
+            var rootSignatureByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.rs"));
+            using (var bufferRootSignature = DataBuffer.Create(rootSignatureByteCode))
+                rootSignature = Collect(device.CreateRootSignature(bufferRootSignature));
 
             var vertexShaderByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.vso"));
             var pixelShaderByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.pso"));

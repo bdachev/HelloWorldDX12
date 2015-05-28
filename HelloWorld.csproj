@@ -84,6 +84,12 @@
       <SEntry>PS</SEntry>
       <Visible>false</Visible>
     </ShaderOutput>
+    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.rs">
+      <Source>Cube.fx</Source>
+      <SType>rootsig_1_0</SType>
+      <SEntry>MyRS1</SEntry>
+      <Visible>false</Visible>
+    </ShaderOutput>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
