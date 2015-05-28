@@ -18,37 +18,45 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 #define MyRS1 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
-              "DescriptorTable( CBV(b0, numDescriptors = 1), " \
-							  " visibility = SHADER_VISIBILITY_VERTEX) " \
+              "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
+              "DescriptorTable( SRV(t0, numDescriptors = 1), " \
+							  " visibility = SHADER_VISIBILITY_PIXEL), " \
+              "DescriptorTable( Sampler(s0, numDescriptors = 1), " \
+							  " visibility = SHADER_VISIBILITY_PIXEL), " \
 
 struct VS_IN
 {
-	float4 pos : POSITION;
-	float4 col : COLOR;
+	float3 pos : POSITION;
+	float3 normal : POSITION;
+	float2 tex : TEXCOORD;
 };
 
 struct PS_IN
 {
 	float4 pos : SV_POSITION;
-	float4 col : COLOR;
+	float3 normal : TEXCOORD0;
+	float2 tex : TEXCOORD1;
 };
 
 cbuffer worldMatrix : register(b0)
 {
 	float4x4 WorldViewProj;
 };
+Texture2D<float4> tex : register(t0);
+sampler sampl : register(s0);
+
 
 PS_IN VS( VS_IN input )
 {
 	PS_IN output = (PS_IN)0;
 	
-	output.pos = mul(input.pos, WorldViewProj);
-	output.col = input.col;
+	output.pos = mul(float4(input.pos, 1.0f), WorldViewProj);
+	output.tex = input.tex;
 	
 	return output;
 }
 
 float4 PS( PS_IN input ) : SV_Target
 {
-	return input.col;
+	return tex.Sample(sampl, input.tex);
 }

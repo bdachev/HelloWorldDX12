@@ -37,15 +37,17 @@ namespace HelloWorld
     /// </summary>
     public class HelloWorld : DisposeCollector
     {
-        private const int SwapBufferCount = 2;
+        private const int SwapBufferCount = 3;
+        private Form form;
         private int width;
         private int height;
         private Device device;
         private CommandAllocator commandListAllocator;
         private CommandQueue commandQueue;
-        private SwapChain swapChain;
+        private SwapChain3 swapChain;
         private DescriptorHeap descriptorHeapRT;
         private DescriptorHeap descriptorHeapCB;
+        private DescriptorHeap descriptorHeapS;
         private GraphicsCommandList commandList;
         private Resource renderTarget;
         private Rectangle scissorRectangle;
@@ -57,10 +59,10 @@ namespace HelloWorld
         private Resource vertexBuffer;
         private VertexBufferView[] vertexBufferView;
         private CpuDescriptorHandle[] descriptorsRT = new CpuDescriptorHandle[1];
-        private DescriptorHeap[] descriptorsHeaps = new DescriptorHeap[1];
+        private DescriptorHeap[] descriptorsHeaps = new DescriptorHeap[2];
         private Resource transform;
+        private Resource texture;
         private long currentFence;
-        private int indexLastSwapBuf;
         private readonly Stopwatch clock;
 
         /// <summary>
@@ -77,6 +79,7 @@ namespace HelloWorld
         /// <param name="form">The form.</param>
         public void Initialize(Form form)
         {
+            this.form = form;
             width = form.ClientSize.Width;
             height = form.ClientSize.Height;
 
@@ -104,13 +107,25 @@ namespace HelloWorld
 
             // swap the back and front buffers
             swapChain.Present(1, 0);
-            indexLastSwapBuf = (indexLastSwapBuf + 1) % SwapBufferCount;
-            RemoveAndDispose(ref renderTarget);
-            renderTarget = Collect(swapChain.GetBackBuffer<Resource>(indexLastSwapBuf));
-            device.CreateRenderTargetView(renderTarget, null, descriptorHeapRT.CPUDescriptorHandleForHeapStart);
 
             // wait and reset EVERYTHING
             WaitForPrevFrame();
+
+            RemoveAndDispose(ref renderTarget);
+            if (width != form.ClientSize.Width || height != form.ClientSize.Height)
+            {
+                width = form.ClientSize.Width;
+                height = form.ClientSize.Height;
+                swapChain.ResizeBuffers(SwapBufferCount, width, height, Format.Unknown, SwapChainFlags.None);
+
+                // Create the viewport
+                viewPort = new ViewportF(0, 0, width, height);
+
+                // Create the scissor
+                scissorRectangle = new Rectangle(0, 0, width, height);
+            }
+            renderTarget = Collect(swapChain.GetBackBuffer<Resource>(swapChain.CurrentBackBufferIndex));
+            device.CreateRenderTargetView(renderTarget, null, descriptorHeapRT.CPUDescriptorHandleForHeapStart);
         }
 
         /// <summary>
@@ -158,7 +173,8 @@ namespace HelloWorld
                     device = Collect(new Device(warpAdapter, FeatureLevel.Level_12_0));
                 }
                 commandQueue = Collect(device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct)));
-                swapChain = Collect(new SwapChain(factory, commandQueue, swapChainDescription));
+                using (var sc1 = new SwapChain(factory, commandQueue, swapChainDescription))
+                    swapChain = Collect(sc1.QueryInterface<SwapChain3>());
             }
 
             // create command queue and allocator objects
@@ -170,6 +186,8 @@ namespace HelloWorld
         /// </summary>
         private void LoadAssets()
         {
+            var assembly = typeof(HelloWorld).Assembly;
+
             // Create the descriptor heap for the render target view
             descriptorHeapRT = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
             {
@@ -182,48 +200,15 @@ namespace HelloWorld
                 DescriptorCount = 1,
                 Flags = DescriptorHeapFlags.ShaderVisible,
             }));
+            descriptorHeapS = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
+            {
+                Type = DescriptorHeapType.Sampler,
+                DescriptorCount = 1,
+                Flags = DescriptorHeapFlags.ShaderVisible,
+            }));
             descriptorsHeaps[0] = descriptorHeapCB;
-            var assembly = typeof(HelloWorld).Assembly;
+            descriptorsHeaps[1] = descriptorHeapS;
 
-            //var descrTable = new[]
-            //{
-            //    new DescriptorRange
-            //    {
-            //        BaseShaderRegister = 0,
-            //        DescriptorCount = 1,
-            //        RangeType = DescriptorRangeType.ConstantBufferView,
-            //        RegisterSpace = 0,
-            //        OffsetInDescriptorsFromTableStart = 0,
-            //    }
-            //};
-            //using (var descrTableBuf = DataBuffer.Create(descrTable))
-            //{
-            //    var rootParams = new[]
-            //    {
-            //        //new RootParameter
-            //        //{
-            //        //    ParameterType = RootParameterType.ConstantBufferView,
-            //        //    ShaderVisibility = ShaderVisibility.Vertex,
-            //        //    Descriptor = new RootDescriptor
-            //        //    {
-            //        //        ShaderRegister = 0,
-            //        //        RegisterSpace = 0,
-            //        //    }
-            //        //},
-            //        new RootParameter
-            //        {
-            //            ParameterType = RootParameterType.DescriptorTable,
-            //            ShaderVisibility = ShaderVisibility.Vertex,
-            //            DescriptorTable = new RootDescriptorTable
-            //            {
-            //                DescriptorRangeCount = 1,
-            //                PDescriptorRanges = descrTableBuf.DataPointer,
-            //            }
-            //        }
-            //    };
-            //    var rsd = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rootParams);
-            //    rootSignature = Collect(device.CreateRootSignature(rsd.Serialize()));
-            //}
             var rootSignatureByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.rs"));
             using (var bufferRootSignature = DataBuffer.Create(rootSignatureByteCode))
                 rootSignature = Collect(device.CreateRootSignature(bufferRootSignature));
@@ -233,8 +218,9 @@ namespace HelloWorld
 
             var layout = new InputLayoutDescription(new InputElement[]
             {
-                new InputElement("POSITION", 0, Format.R32G32B32A32_Float, 0, 0),
-                new InputElement("COLOR", 0, Format.R32G32B32A32_Float, 16, 0)
+                new InputElement("POSITION", 0, Format.R32G32B32_Float, 0),
+                new InputElement("NORMAL", 0, Format.R32G32B32_Float, 0),
+                new InputElement("TEXCOORD", 0, Format.R32G32_Float, 0)
             });
 
             #region pipeline state
@@ -260,52 +246,51 @@ namespace HelloWorld
             #region vertices
             var vertices = new[]
                                  {
-                                      new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f), // Front
-                                      new Vector4(-1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-                                      new Vector4( 1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-                                      new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-                                      new Vector4( 1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-                                      new Vector4( 1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
+                                      -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Front
+                                      -1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                                       1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                                       1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                                       1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
 
-                                      new Vector4(-1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f), // BACK
-                                      new Vector4( 1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4(-1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4(-1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4( 1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4( 1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
+                                      -1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // BACK
+                                      -1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // BACK
+                                       1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                                      -1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                                       1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                                       1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
 
-                                      new Vector4(-1.0f, 1.0f, -1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f), // Top
-                                      new Vector4(-1.0f, 1.0f,  1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4( 1.0f, 1.0f,  1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4(-1.0f, 1.0f, -1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4( 1.0f, 1.0f,  1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4( 1.0f, 1.0f, -1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
+                                      -1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Top
+                                      -1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Top
+                                      -1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                                       1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                                       1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                                       1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
 
-                                      new Vector4(-1.0f,-1.0f, -1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f), // Bottom
-                                      new Vector4( 1.0f,-1.0f,  1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4(-1.0f,-1.0f,  1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4(-1.0f,-1.0f, -1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4( 1.0f,-1.0f, -1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-                                      new Vector4( 1.0f,-1.0f,  1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
+                                      -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Bottom
+                                      -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Bottom
+                                       1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                                      -1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                                       1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                                       1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
 
-                                      new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f), // Left
-                                      new Vector4(-1.0f, -1.0f,  1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4(-1.0f,  1.0f,  1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4(-1.0f,  1.0f,  1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-                                      new Vector4(-1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
+                                      -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Left
+                                      -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Left
+                                      -1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                                      -1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                                      -1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+                                      -1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
 
-                                      new Vector4( 1.0f, -1.0f, -1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f), // Right
-                                      new Vector4( 1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-                                      new Vector4( 1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-                                      new Vector4( 1.0f, -1.0f, -1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-                                      new Vector4( 1.0f,  1.0f, -1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-                                      new Vector4( 1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
+                                       1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Right
+                                       1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Right
+                                       1.0f,  1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f,
+                                       1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
+                                       1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
                             };
             #endregion vertices
             #region vertex buffer
             // Instantiate Vertex buiffer from vertex data
-            int sizeInBytes = vertices.Length * Utilities.SizeOf<Vector4>();
+            int sizeOfFloat = sizeof(float);
+            int sizeInBytes = vertices.Length * sizeOfFloat;
             vertexBuffer = Collect(device.CreateCommittedResource(
                             new HeapProperties(HeapType.Upload),
                             HeapFlags.None,
@@ -317,7 +302,7 @@ namespace HelloWorld
                 {
                     BufferLocation = vertexBuffer.GPUVirtualAddress,
                     SizeInBytes = sizeInBytes,
-                    StrideInBytes = Utilities.SizeOf<Vector4>() * 2,
+                    StrideInBytes = sizeOfFloat * 8,
                 }
             };
             var ptr = vertexBuffer.Map(0);
@@ -331,12 +316,36 @@ namespace HelloWorld
                             HeapFlags.None,
                             new ResourceDescription(ResourceDimension.Buffer, 0, Utilities.SizeOf<Matrix>(), 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
                             ResourceStates.GenericRead));
-            device.CreateConstantBufferView(new ConstantBufferViewDescription
-            {
-                BufferLocation = transform.GPUVirtualAddress,
-                SizeInBytes = 256,
-            }, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
             #endregion transform
+
+            #region texture
+            using (var bmp = new System.Drawing.Bitmap("GeneticaMortarlessBlocks.jpg"))
+            {
+                int width = bmp.Width, height = bmp.Height;
+                var bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, width, height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                texture = Collect(device.CreateCommittedResource(
+                                                new HeapProperties(HeapType.Upload),
+                                                HeapFlags.None,
+                                                new ResourceDescription(ResourceDimension.Texture2D,
+                                                            0, width, height, 1, 1,
+                                                            Format.B8G8R8A8_UNorm_SRgb, 1, 0,
+                                                            TextureLayout.Unknown,
+                                                            ResourceFlags.None),
+                                                ResourceStates.GenericRead));
+                texture.WriteToSubresource(0, null, bmpData.Scan0, bmpData.Stride, 0);
+            }
+            device.CreateShaderResourceView(texture, null, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
+            #endregion texture
+
+            #region sampler
+            device.CreateSampler(new SamplerStateDescription
+            {
+                AddressU = TextureAddressMode.Wrap,
+                AddressV = TextureAddressMode.Wrap,
+                AddressW = TextureAddressMode.Wrap,
+                Filter = Filter.MaximumMinMagMipLinear,
+            }, descriptorHeapS.CPUDescriptorHandleForHeapStart);
+            #endregion sampler
 
             // Create the main command list
             commandList = Collect(device.CreateCommandList(CommandListType.Direct, commandListAllocator, pipelineState));
@@ -381,8 +390,8 @@ namespace HelloWorld
             commandList.SetViewport(viewPort);
             commandList.SetScissorRectangles(scissorRectangle);
             var view = Matrix.LookAtLH(new Vector3(0, 0, -5), Vector3.Zero, Vector3.UnitY);
-            var proj = Matrix.PerspectiveFovLH(MathUtil.Pi / 4, (float)height / width, 0.1f, 100);
-            var world = Matrix.RotationY((float)time);
+            var proj = Matrix.PerspectiveFovLH(MathUtil.Pi / 4, (float)width / height, 0.1f, 100);
+            var world = Matrix.RotationY((float)time) * Matrix.RotationX((float)time / 2);
             var wvpT = world * view * proj;
             wvpT.Transpose();
             var ptr = transform.Map(0);
@@ -390,9 +399,10 @@ namespace HelloWorld
             transform.Unmap(0);
             commandList.PipelineState = pipelineState;
             commandList.SetGraphicsRootSignature(rootSignature);
-            //commandList.SetGraphicsRootConstantBufferView(0, transform.GPUVirtualAddress);
-            commandList.SetDescriptorHeaps(1, descriptorsHeaps);
-            commandList.Descriptors.SetGraphicsRootDescriptorTable(0, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
+            commandList.SetGraphicsRootConstantBufferView(0, transform.GPUVirtualAddress);
+            commandList.SetDescriptorHeaps(2, descriptorsHeaps);
+            commandList.Descriptors.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
+            commandList.Descriptors.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
 
             // Use barrier to notify that we are using the RenderTarget to clear it
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.Present, ResourceStates.RenderTarget);
@@ -401,9 +411,9 @@ namespace HelloWorld
 	        commandList.ClearRenderTargetView(descriptorHeapRT.CPUDescriptorHandleForHeapStart, new Color4((float)Math.Sin(time) * 0.25f + 0.5f, (float)Math.Sin(time * 0.5f) * 0.4f + 0.6f, 0.4f, 1.0f), 0, null);
             descriptorsRT[0] = descriptorHeapRT.CPUDescriptorHandleForHeapStart;
             commandList.SetRenderTargets(1, descriptorsRT, true, null);
-            commandList.PrimitiveTopology = PrimitiveTopology.TriangleList;
+            commandList.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
             commandList.SetVertexBuffers(0, 1, vertexBufferView);
-            commandList.DrawInstanced(36, 1, 0, 0);
+            commandList.DrawInstanced(34, 1, 0, 0);
 
             // Use barrier to notify that we are going to present the RenderTarget
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.RenderTarget, ResourceStates.Present);
