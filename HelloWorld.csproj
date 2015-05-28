@@ -69,11 +69,21 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Cube.pso" />
-    <EmbeddedResource Include="Cube.vso" />
+    <ShaderCode Include="Cube.fx" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Cube.fx" />
+    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.vso">
+      <Source>Cube.fx</Source>
+      <SType>vs_5_0</SType>
+      <SEntry>VS</SEntry>
+      <Visible>false</Visible>
+    </ShaderOutput>
+    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.pso">
+      <Source>Cube.fx</Source>
+      <SType>ps_5_0</SType>
+      <SEntry>PS</SEntry>
+      <Visible>false</Visible>
+    </ShaderOutput>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -83,4 +93,23 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <Target Name="BuildShaders" Inputs="@(ShaderCode)" Outputs="@(ShaderOutput)">
+    <PropertyGroup>
+      <WindowsKitsPath>$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</WindowsKitsPath>
+    </PropertyGroup>
+    <Exec Outputs="%(ShaderOutput.Identity)" Command="&quot;$(WindowsKitsPath)bin\x86\fxc.exe&quot; /nologo /Fc &quot;%(ShaderOutput.Identity).asm&quot; /Fo &quot;%(ShaderOutput.Identity)&quot; /T %(ShaderOutput.SType) /E %(ShaderOutput.SEntry) %(ShaderOutput.Defines) /O3 &quot;%(ShaderOutput.Source)&quot;" />
+    <ItemGroup>
+      <EmbeddedResource Include="@(ShaderOutput)">
+        <LogicalName>Shaders.%(Filename)%(Extension)</LogicalName>
+        <Type>Non-Resx</Type>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
+  <Target Name="CleanShaders">
+    <Delete Files="@(ShaderOutput)" />
+  </Target>
+  <PropertyGroup>
+    <BuildDependsOn>BuildShaders;$(BuildDependsOn)</BuildDependsOn>
+    <CleanDependsOn>CleanShaders;$(CleanDependsOn)</CleanDependsOn>
+  </PropertyGroup>
 </Project>
