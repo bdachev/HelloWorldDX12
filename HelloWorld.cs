@@ -179,7 +179,7 @@ namespace HelloWorld
             descriptorHeapCB = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
             {
                 Type = DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
-                DescriptorCount = 2,
+                DescriptorCount = 1,
                 Flags = DescriptorHeapFlags.ShaderVisible,
             }));
             descriptorsHeaps[0] = descriptorHeapCB;
@@ -193,7 +193,7 @@ namespace HelloWorld
                     DescriptorCount = 1,
                     RangeType = DescriptorRangeType.ConstantBufferView,
                     RegisterSpace = 0,
-                    OffsetInDescriptorsFromTableStart = 1,
+                    OffsetInDescriptorsFromTableStart = 0,
                 }
             };
             var descrTableBuf = Collect(DataBuffer.Create(descrTable));
