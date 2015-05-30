@@ -17,9 +17,10 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-//#define USE_DEPTH
-//#define USE_INSTANCES
-//#define USE_INDICES
+#define USE_DEPTH
+#define USE_INSTANCES
+#define USE_INDICES
+#define USE_TEXTURE
 
 using System;
 using System.Diagnostics;
@@ -49,8 +50,6 @@ namespace HelloWorld
         private CommandQueue commandQueue;
         private SwapChain3 swapChain;
         private DescriptorHeap descriptorHeapRT;
-        private DescriptorHeap descriptorHeapCB;
-        private DescriptorHeap descriptorHeapS;
         private GraphicsCommandList commandList;
         private Resource renderTarget;
 #if USE_DEPTH
@@ -70,12 +69,17 @@ namespace HelloWorld
         private IndexBufferView indexBufferView;
 #endif
 #if USE_INSTANCES
-        private Resource instanceBuffer;
+        private Resource instancesBuffer;
+        private VertexBufferView[] instancesBufferView;
 #endif
         private CpuDescriptorHandle[] descriptorsRT = new CpuDescriptorHandle[1];
+#if USE_TEXTURE
         private DescriptorHeap[] descriptorsHeaps = new DescriptorHeap[2];
-        private Resource transform;
+        private DescriptorHeap descriptorHeapCB;
+        private DescriptorHeap descriptorHeapS;
         private Resource texture;
+#endif
+        private Resource transform;
         private long currentFence;
         private readonly Stopwatch clock;
 
@@ -137,7 +141,7 @@ namespace HelloWorld
                     new HeapProperties(HeapType.Default),
                     HeapFlags.None,
                     new ResourceDescription(ResourceDimension.Texture2D, 0, width, height, 1, 1, Format.D32_Float, 1, 0, TextureLayout.Unknown, ResourceFlags.AllowDepthStencil),
-                    ResourceStates.DepthWrite | ResourceStates.DepthRead, 
+                    ResourceStates.Common, 
                     new ClearValue
                     {
                         Format = Format.D32_Float,
@@ -233,6 +237,7 @@ namespace HelloWorld
                 DescriptorCount = 1
             }));
 #endif
+#if USE_TEXTURE
             descriptorHeapCB = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
             {
                 Type = DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
@@ -247,7 +252,7 @@ namespace HelloWorld
             }));
             descriptorsHeaps[0] = descriptorHeapCB;
             descriptorsHeaps[1] = descriptorHeapS;
-
+#endif
             var rootSignatureByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.rs"));
             using (var bufferRootSignature = DataBuffer.Create(rootSignatureByteCode))
                 rootSignature = Collect(device.CreateRootSignature(bufferRootSignature));
@@ -359,18 +364,18 @@ namespace HelloWorld
 #endregion vertex buffer
 #region instances
 #if USE_INSTANCES
-            var instances = new[]
+            var instances = new float[]
             {
                 0,  0,  0,
-                2,  0,  0,
-               -2,  0,  0,
-                0,  2,  0,
-                0, -2,  0,
-                0,  0,  2,
-                0,  0, -2,
+                4,  0,  0,
+               -4,  0,  0,
+                0,  4,  0,
+                0, -4,  0,
+                0,  0,  4,
+                0,  0, -4,
             };
             int instanceSizeInBytes = sizeOfFloat * instances.Length;
-            instanceBuffer = Collect(device.CreateCommittedResource(
+            instancesBuffer = Collect(device.CreateCommittedResource(
                             new HeapProperties(HeapType.Upload),
                             HeapFlags.None,
                             new ResourceDescription(ResourceDimension.Buffer, 0, instanceSizeInBytes, 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
@@ -379,14 +384,14 @@ namespace HelloWorld
             {
                 new VertexBufferView
                 {
-                    BufferLocation = instanceBuffer.GPUVirtualAddress,
+                    BufferLocation = instancesBuffer.GPUVirtualAddress,
                     SizeInBytes = instanceSizeInBytes,
                     StrideInBytes = sizeOfFloat * 3,
                 }
             };
-            ptr = instanceBuffer.Map(0);
+            ptr = instancesBuffer.Map(0);
             Utilities.Write(ptr, instances, 0, instances.Length);
-            instanceBuffer.Unmap(0);
+            instancesBuffer.Unmap(0);
 #endif
 #endregion instances
 
@@ -425,8 +430,9 @@ namespace HelloWorld
                             HeapFlags.None,
                             new ResourceDescription(ResourceDimension.Buffer, 0, Utilities.SizeOf<Matrix>(), 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
                             ResourceStates.GenericRead));
-#endregion transform
+            #endregion transform
 
+#if USE_TEXTURE
 #region texture
             using (var bmp = new System.Drawing.Bitmap("GeneticaMortarlessBlocks.jpg"))
             {
@@ -455,7 +461,7 @@ namespace HelloWorld
                 Filter = Filter.MaximumMinMagMipLinear,
             }, descriptorHeapS.CPUDescriptorHandleForHeapStart);
 #endregion sampler
-
+#endif
             // Get the backbuffer and creates the render target view
             renderTarget = Collect(swapChain.GetBackBuffer<Resource>(0));
             device.CreateRenderTargetView(renderTarget, null, descriptorHeapRT.CPUDescriptorHandleForHeapStart);
@@ -518,7 +524,7 @@ namespace HelloWorld
             commandList.SetScissorRectangles(scissorRectangle);
             var view = Matrix.LookAtLH(new Vector3(0, 0, -5), Vector3.Zero, Vector3.UnitY);
             var proj = Matrix.PerspectiveFovLH(MathUtil.Pi / 4, (float)width / height, 0.1f, 100);
-            var world = Matrix.RotationY((float)time) * Matrix.RotationX((float)time / 2);
+            var world = Matrix.Scaling(0.1f) * Matrix.RotationY((float)time) * Matrix.RotationX((float)time / 2);
             var wvpT = world * view * proj;
             wvpT.Transpose();
             var ptr = transform.Map(0);
@@ -527,10 +533,11 @@ namespace HelloWorld
             commandList.PipelineState = pipelineState;
             commandList.SetGraphicsRootSignature(rootSignature);
             commandList.SetGraphicsRootConstantBufferView(0, transform.GPUVirtualAddress);
-            commandList.SetDescriptorHeaps(2, descriptorsHeaps);
-            commandList.Descriptors.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
-            commandList.Descriptors.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
-
+#if USE_TEXTURE
+            //commandList.SetDescriptorHeaps(2, descriptorsHeaps);
+            //commandList.Descriptors.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
+            //commandList.Descriptors.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
+#endif
             // Use barrier to notify that we are using the RenderTarget to clear it
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.Present, ResourceStates.RenderTarget);
             //commandList.ResourceBarrierTransition(depthBuffer, ResourceStates.Present, ResourceStates.DepthWrite);
