@@ -17,6 +17,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+//#define USE_DEPTH
+//#define USE_INSTANCES
+//#define USE_INDICES
 
 using System;
 using System.Diagnostics;
@@ -50,6 +53,10 @@ namespace HelloWorld
         private DescriptorHeap descriptorHeapS;
         private GraphicsCommandList commandList;
         private Resource renderTarget;
+#if USE_DEPTH
+        private Resource depthBuffer;
+        private DescriptorHeap descriptorHeapDS;
+#endif
         private Rectangle scissorRectangle;
         private ViewportF viewPort;
         private AutoResetEvent eventHandle;
@@ -58,6 +65,13 @@ namespace HelloWorld
         private RootSignature rootSignature;
         private Resource vertexBuffer;
         private VertexBufferView[] vertexBufferView;
+#if USE_INDICES
+        private Resource indexBuffer;
+        private IndexBufferView indexBufferView;
+#endif
+#if USE_INSTANCES
+        private Resource instanceBuffer;
+#endif
         private CpuDescriptorHandle[] descriptorsRT = new CpuDescriptorHandle[1];
         private DescriptorHeap[] descriptorsHeaps = new DescriptorHeap[2];
         private Resource transform;
@@ -117,7 +131,24 @@ namespace HelloWorld
                 width = form.ClientSize.Width;
                 height = form.ClientSize.Height;
                 swapChain.ResizeBuffers(SwapBufferCount, width, height, Format.Unknown, SwapChainFlags.None);
-
+#if USE_DEPTH
+                RemoveAndDispose(ref depthBuffer);
+                depthBuffer = Collect(device.CreateCommittedResource(
+                    new HeapProperties(HeapType.Default),
+                    HeapFlags.None,
+                    new ResourceDescription(ResourceDimension.Texture2D, 0, width, height, 1, 1, Format.D32_Float, 1, 0, TextureLayout.Unknown, ResourceFlags.AllowDepthStencil),
+                    ResourceStates.DepthWrite | ResourceStates.DepthRead, 
+                    new ClearValue
+                    {
+                        Format = Format.D32_Float,
+                        DepthStencil = new DepthStencilValue
+                        {
+                            Depth = 1,
+                            Stencil = 0,
+                        }
+                    }));
+                device.CreateDepthStencilView(depthBuffer, null, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
+#endif
                 // Create the viewport
                 viewPort = new ViewportF(0, 0, width, height);
 
@@ -194,6 +225,14 @@ namespace HelloWorld
                 Type = DescriptorHeapType.RenderTargetView,
                 DescriptorCount = 1
             }));
+            descriptorsRT[0] = descriptorHeapRT.CPUDescriptorHandleForHeapStart;
+#if USE_DEPTH
+            descriptorHeapDS = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
+            {
+                Type = DescriptorHeapType.DepthStencilView,
+                DescriptorCount = 1
+            }));
+#endif
             descriptorHeapCB = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
             {
                 Type = DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
@@ -220,10 +259,13 @@ namespace HelloWorld
             {
                 new InputElement("POSITION", 0, Format.R32G32B32_Float, 0),
                 new InputElement("NORMAL", 0, Format.R32G32B32_Float, 0),
-                new InputElement("TEXCOORD", 0, Format.R32G32_Float, 0)
+                new InputElement("TEXCOORD", 0, Format.R32G32_Float, 0),
+#if USE_INSTANCES
+                new InputElement("OFFSET", 0, Format.R32G32B32_Float, 0, 1, InputClassification.PerInstanceData, 1),
+#endif
             });
 
-            #region pipeline state
+#region pipeline state
             var psd = new GraphicsPipelineStateDescription
             {
                 InputLayout = layout,
@@ -231,6 +273,7 @@ namespace HelloWorld
                 PixelShader = pixelShaderByteCode,
                 RootSignature = rootSignature,
                 DepthStencilState = DepthStencilStateDescription.Default(),
+                DepthStencilFormat = Format.Unknown,
                 BlendState = BlendStateDescription.Default(),
                 RasterizerState = RasterizerStateDescription.Default(),
                 SampleDescription = new SampleDescription(1, 0),
@@ -239,11 +282,16 @@ namespace HelloWorld
                 SampleMask = -1,
             };
             psd.RenderTargetFormats[0] = Format.R8G8B8A8_UNorm;
+#if USE_DEPTH
+            psd.DepthStencilFormat = Format.D32_Float;
+#else
             psd.DepthStencilState.IsDepthEnabled = false;
+#endif
+            //psd.RasterizerState.CullMode = CullMode.None;
             pipelineState = Collect(device.CreateGraphicsPipelineState(psd));
-            #endregion pipeline state
+#endregion pipeline state
 
-            #region vertices
+#region vertices
             var vertices = new[]
                                  {
                                       -1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, // Front
@@ -286,8 +334,8 @@ namespace HelloWorld
                                        1.0f, -1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
                                        1.0f,  1.0f,  1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
                             };
-            #endregion vertices
-            #region vertex buffer
+#endregion vertices
+#region vertex buffer
             // Instantiate Vertex buiffer from vertex data
             int sizeOfFloat = sizeof(float);
             int sizeInBytes = vertices.Length * sizeOfFloat;
@@ -308,17 +356,78 @@ namespace HelloWorld
             var ptr = vertexBuffer.Map(0);
             Utilities.Write(ptr, vertices, 0, vertices.Length);
             vertexBuffer.Unmap(0);
-            #endregion vertex buffer
+#endregion vertex buffer
+#region instances
+#if USE_INSTANCES
+            var instances = new[]
+            {
+                0,  0,  0,
+                2,  0,  0,
+               -2,  0,  0,
+                0,  2,  0,
+                0, -2,  0,
+                0,  0,  2,
+                0,  0, -2,
+            };
+            int instanceSizeInBytes = sizeOfFloat * instances.Length;
+            instanceBuffer = Collect(device.CreateCommittedResource(
+                            new HeapProperties(HeapType.Upload),
+                            HeapFlags.None,
+                            new ResourceDescription(ResourceDimension.Buffer, 0, instanceSizeInBytes, 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
+                            ResourceStates.GenericRead));
+            instancesBufferView = new[]
+            {
+                new VertexBufferView
+                {
+                    BufferLocation = instanceBuffer.GPUVirtualAddress,
+                    SizeInBytes = instanceSizeInBytes,
+                    StrideInBytes = sizeOfFloat * 3,
+                }
+            };
+            ptr = instanceBuffer.Map(0);
+            Utilities.Write(ptr, instances, 0, instances.Length);
+            instanceBuffer.Unmap(0);
+#endif
+#endregion instances
 
-            #region transform
+#region indices
+#if USE_INDICES
+            var indexData = new[]
+            {
+                     0,   1,   2,   3,   4,
+                5,   6,   7,   8,   9,  10,
+               11,  12,  13,  14,  15,  16,
+               17,  18,  19,  20,  21,  22,
+               23,  24,  25,  26,  27,  28,
+               29,  30,  31,  32,  33
+            };
+            sizeInBytes = indexData.Length * sizeof(int);
+            indexBuffer = Collect(device.CreateCommittedResource(
+                            new HeapProperties(HeapType.Upload),
+                            HeapFlags.None,
+                            new ResourceDescription(ResourceDimension.Buffer, 0, sizeInBytes, 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
+                            ResourceStates.GenericRead));
+            ptr = indexBuffer.Map(0);
+            Utilities.Write(ptr, indexData, 0, indexData.Length);
+            indexBuffer.Unmap(0);
+            indexBufferView = new IndexBufferView
+            {
+                 BufferLocation = indexBuffer.GPUVirtualAddress,
+                 SizeInBytes = sizeInBytes,
+                 Format = Format.R32_UInt
+            };
+#endif
+#endregion indices
+
+#region transform
             transform = Collect(device.CreateCommittedResource(
                             new HeapProperties(HeapType.Upload),
                             HeapFlags.None,
                             new ResourceDescription(ResourceDimension.Buffer, 0, Utilities.SizeOf<Matrix>(), 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
                             ResourceStates.GenericRead));
-            #endregion transform
+#endregion transform
 
-            #region texture
+#region texture
             using (var bmp = new System.Drawing.Bitmap("GeneticaMortarlessBlocks.jpg"))
             {
                 int width = bmp.Width, height = bmp.Height;
@@ -335,9 +444,9 @@ namespace HelloWorld
                 texture.WriteToSubresource(0, null, bmpData.Scan0, bmpData.Stride, 0);
             }
             device.CreateShaderResourceView(texture, null, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
-            #endregion texture
+#endregion texture
 
-            #region sampler
+#region sampler
             device.CreateSampler(new SamplerStateDescription
             {
                 AddressU = TextureAddressMode.Wrap,
@@ -345,14 +454,29 @@ namespace HelloWorld
                 AddressW = TextureAddressMode.Wrap,
                 Filter = Filter.MaximumMinMagMipLinear,
             }, descriptorHeapS.CPUDescriptorHandleForHeapStart);
-            #endregion sampler
-
-            // Create the main command list
-            commandList = Collect(device.CreateCommandList(CommandListType.Direct, commandListAllocator, pipelineState));
+#endregion sampler
 
             // Get the backbuffer and creates the render target view
             renderTarget = Collect(swapChain.GetBackBuffer<Resource>(0));
             device.CreateRenderTargetView(renderTarget, null, descriptorHeapRT.CPUDescriptorHandleForHeapStart);
+
+#if USE_DEPTH
+            depthBuffer = Collect(device.CreateCommittedResource(
+            new HeapProperties(HeapType.Default),
+            HeapFlags.None,
+            new ResourceDescription(ResourceDimension.Texture2D, 0, width, height, 1, 1, Format.D32_Float, 1, 0, TextureLayout.Unknown, ResourceFlags.AllowDepthStencil),
+            ResourceStates.Present,
+            new ClearValue
+            {
+                Format = Format.D32_Float,
+                DepthStencil = new DepthStencilValue
+                {
+                    Depth = 1,
+                    Stencil = 0,
+                }
+            }));
+            device.CreateDepthStencilView(depthBuffer, null, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
+#endif
 
             // Create the viewport
             viewPort = new ViewportF(0, 0, width, height);
@@ -363,6 +487,9 @@ namespace HelloWorld
             // Create a fence to wait for next frame
             fence = Collect(device.CreateFence(0, FenceFlags.None));
             currentFence = 1;
+
+            // Create the main command list
+            commandList = Collect(device.CreateCommandList(CommandListType.Direct, commandListAllocator, pipelineState));
 
             // Close command list
             commandList.Close();
@@ -406,19 +533,40 @@ namespace HelloWorld
 
             // Use barrier to notify that we are using the RenderTarget to clear it
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.Present, ResourceStates.RenderTarget);
+            //commandList.ResourceBarrierTransition(depthBuffer, ResourceStates.Present, ResourceStates.DepthWrite);
 
-	        // Clear the RenderTarget
-	        commandList.ClearRenderTargetView(descriptorHeapRT.CPUDescriptorHandleForHeapStart, new Color4((float)Math.Sin(time) * 0.25f + 0.5f, (float)Math.Sin(time * 0.5f) * 0.4f + 0.6f, 0.4f, 1.0f), 0, null);
-            descriptorsRT[0] = descriptorHeapRT.CPUDescriptorHandleForHeapStart;
+            // Clear the RenderTarget
+            commandList.ClearRenderTargetView(descriptorHeapRT.CPUDescriptorHandleForHeapStart, new Color4((float)Math.Sin(time) * 0.25f + 0.5f, (float)Math.Sin(time * 0.5f) * 0.4f + 0.6f, 0.4f, 1.0f), 0, null);
+#if USE_DEPTH
+            commandList.ClearDepthStencilView(descriptorHeapDS.CPUDescriptorHandleForHeapStart, ClearFlags.FlagsDepth, 1, 0, 0, null);
+            commandList.SetRenderTargets(1, descriptorsRT, true, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
+#else
             commandList.SetRenderTargets(1, descriptorsRT, true, null);
+#endif
             commandList.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
             commandList.SetVertexBuffers(0, 1, vertexBufferView);
+#if USE_INSTANCES
+            commandList.SetVertexBuffers(1, 1, instancesBufferView);
+#if USE_INDICES
+            commandList.IndexBuffer = indexBufferView;
+            commandList.DrawIndexedInstanced(34, 7, 0, 0, 0);
+#else
+            commandList.DrawInstanced(34, 7, 0, 0);
+#endif
+#else
+#if USE_INDICES
+            commandList.IndexBuffer = indexBufferView;
+            commandList.DrawIndexedInstanced(34, 1, 0, 0, 0);
+#else
             commandList.DrawInstanced(34, 1, 0, 0);
+#endif
+#endif
 
             // Use barrier to notify that we are going to present the RenderTarget
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.RenderTarget, ResourceStates.Present);
+            //commandList.ResourceBarrierTransition(depthBuffer, ResourceStates.DepthWrite, ResourceStates.Present);
 
-	        // Execute the command
+            // Execute the command
             commandList.Close();
         }
 

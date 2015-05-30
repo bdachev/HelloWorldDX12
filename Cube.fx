@@ -27,8 +27,9 @@
 struct VS_IN
 {
 	float3 pos : POSITION;
-	float3 normal : POSITION;
+	float3 normal : NORMAL;
 	float2 tex : TEXCOORD;
+	//float3 offset : OFFSET;
 };
 
 struct PS_IN
@@ -51,6 +52,7 @@ PS_IN VS( VS_IN input )
 	PS_IN output = (PS_IN)0;
 	
 	output.pos = mul(float4(input.pos, 1.0f), WorldViewProj);
+	//output.pos = mul(float4(input.pos + input.offset, 1.0f), WorldViewProj);
 	output.tex = input.tex;
 	
 	return output;
