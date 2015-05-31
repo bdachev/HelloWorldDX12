@@ -60,6 +60,6 @@ PS_IN VS( VS_IN input )
 
 float4 PS( PS_IN input ) : SV_Target
 {
-	return float4(input.tex, 1, 1);
-	//return tex.Sample(sampl, input.tex);
+	//return float4(input.tex, 1, 1);
+	return tex.Sample(sampl, input.tex);
 }

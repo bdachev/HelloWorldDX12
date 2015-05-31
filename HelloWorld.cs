@@ -517,7 +517,7 @@ namespace HelloWorld
 
             commandListAllocator.Reset();
 
-            commandList.Reset(commandListAllocator, null);
+            commandList.Reset(commandListAllocator, pipelineState);
 
             // setup viewport and scissors
             commandList.SetViewport(viewPort);
@@ -530,13 +530,13 @@ namespace HelloWorld
             var ptr = transform.Map(0);
             Utilities.Write(ptr, ref wvpT);
             transform.Unmap(0);
-            commandList.PipelineState = pipelineState;
+            //commandList.PipelineState = pipelineState;
             commandList.SetGraphicsRootSignature(rootSignature);
             commandList.SetGraphicsRootConstantBufferView(0, transform.GPUVirtualAddress);
 #if USE_TEXTURE
-            //commandList.SetDescriptorHeaps(2, descriptorsHeaps);
-            //commandList.Descriptors.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
-            //commandList.Descriptors.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
+            commandList.SetDescriptorHeaps(2, descriptorsHeaps);
+            commandList.Descriptors.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
+            commandList.Descriptors.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
 #endif
             // Use barrier to notify that we are using the RenderTarget to clear it
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.Present, ResourceStates.RenderTarget);
