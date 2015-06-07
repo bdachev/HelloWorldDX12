@@ -188,7 +188,7 @@ namespace HelloWorld
             var swapChainDescription = new SwapChainDescription()
             {
                 BufferCount = SwapBufferCount,
-                ModeDescription = new ModeDescription(Format.R8G8B8A8_UNorm),
+                ModeDescription = new ModeDescription(Format.R16G16B16A16_Float),
                 Usage = Usage.RenderTargetOutput,
                 OutputHandle = form.Handle,
                 SwapEffect = SwapEffect.FlipSequential,
@@ -203,9 +203,13 @@ namespace HelloWorld
             // create device
             using (var factory = new Factory4())
             {
-                using (var warpAdapter = factory.WarpAdapter)
+                //using (var warpAdapter = factory.WarpAdapter)
+                //{
+                //    device = Collect(new Device(warpAdapter, FeatureLevel.Level_12_0));
+                //}
+                using (var warpAdapter = factory.Adapters[1])
                 {
-                    device = Collect(new Device(warpAdapter, FeatureLevel.Level_12_0));
+                    device = Collect(new Device(warpAdapter, FeatureLevel.Level_11_0));
                 }
                 commandQueue = Collect(device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct)));
                 using (var sc1 = new SwapChain(factory, commandQueue, swapChainDescription))
@@ -222,6 +226,9 @@ namespace HelloWorld
         private void LoadAssets()
         {
             var assembly = typeof(HelloWorld).Assembly;
+
+            // Create the main command list
+            commandList = Collect(device.CreateCommandList(CommandListType.Direct, commandListAllocator, pipelineState));
 
             // Create the descriptor heap for the render target view
             descriptorHeapRT = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
@@ -286,7 +293,7 @@ namespace HelloWorld
                 PrimitiveTopologyType = PrimitiveTopologyType.Triangle,
                 SampleMask = -1,
             };
-            psd.RenderTargetFormats[0] = Format.R8G8B8A8_UNorm;
+            psd.RenderTargetFormats[0] = Format.R16G16B16A16_Float;
 #if USE_DEPTH
             psd.DepthStencilFormat = Format.D32_Float;
 #else
@@ -433,24 +440,82 @@ namespace HelloWorld
             #endregion transform
 
 #if USE_TEXTURE
-#region texture
+            #region texture
+            Resource buf;
             using (var bmp = new System.Drawing.Bitmap("GeneticaMortarlessBlocks.jpg"))
             {
                 int width = bmp.Width, height = bmp.Height;
-                var bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, width, height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                var descrs = new[]
+                {
+                    new ResourceDescription(ResourceDimension.Texture2D,
+                                            0, width, height, 1, 1,
+                                            Format.B8G8R8A8_UNorm, 1, 0,
+                                            TextureLayout.Unknown,
+                                            ResourceFlags.None),
+                };
                 texture = Collect(device.CreateCommittedResource(
+                                            new HeapProperties(HeapType.Default),
+                                            HeapFlags.None,
+                                            descrs[0],
+                                            ResourceStates.CopyDestination)
+                        );
+                var resAllocInfo = device.GetResourceAllocationInfo(1, 1, descrs);
+                buf = device.CreateCommittedResource(
                                                 new HeapProperties(HeapType.Upload),
                                                 HeapFlags.None,
-                                                new ResourceDescription(ResourceDimension.Texture2D,
-                                                            0, width, height, 1, 1,
-                                                            Format.B8G8R8A8_UNorm_SRgb, 1, 0,
-                                                            TextureLayout.Unknown,
-                                                            ResourceFlags.None),
-                                                ResourceStates.GenericRead));
-                texture.WriteToSubresource(0, null, bmpData.Scan0, bmpData.Stride, 0);
+                                                new ResourceDescription(
+                                                    ResourceDimension.Buffer,
+                                                    0,
+                                                    resAllocInfo.SizeInBytes,
+                                                    1, 1, 1,
+                                                    Format.Unknown,
+                                                    1, 0,
+                                                    TextureLayout.RowMajor,
+                                                    ResourceFlags.None),
+                                                ResourceStates.GenericRead);
+                {
+                    var ptrBuf = buf.Map(0);
+                    var bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, width, height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+
+                    var ptrDst = ptrBuf;
+                    var ptrSrc = bmpData.Scan0;
+                    int rowPitch = (bmpData.Stride + 255) / 256 * 256;
+                    for (int y = 0; y < height; y++, ptrDst += rowPitch, ptrSrc += bmpData.Stride)
+                        Utilities.CopyMemory(ptrDst, ptrSrc, bmpData.Stride);
+                    buf.Unmap(0);
+                    bmp.UnlockBits(bmpData);
+
+                    var src = new TextureCopyLocation
+                    {
+                        Resource = buf.NativePointer,
+                        Type = TextureCopyType.PlacedFootprint,
+                        PlacedFootprint = new PlacedSubResourceFootprint
+                        {
+                            Offset = 0,
+                            Footprint = new SubResourceFootprint
+                            {
+                                Format = Format.B8G8R8A8_UNorm_SRgb,
+                                Width = width,
+                                Height = height,
+                                Depth = 1,
+                                RowPitch = rowPitch
+                            }
+                        }
+                    };
+                    var dst = new TextureCopyLocation
+                    {
+                        Resource = texture.NativePointer,
+                        Type = TextureCopyType.SubResourceIndex,
+                        SubresourceIndex = 0,
+                    };
+                    // record copy
+                    commandList.CopyTextureRegion(dst, 0, 0, 0, src, null);
+
+                    commandList.ResourceBarrierTransition(texture, ResourceStates.CopyDestination, ResourceStates.GenericRead);
+                }
             }
             device.CreateShaderResourceView(texture, null, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
-#endregion texture
+            #endregion texture
 
 #region sampler
             device.CreateSampler(new SamplerStateDescription
@@ -494,9 +559,6 @@ namespace HelloWorld
             fence = Collect(device.CreateFence(0, FenceFlags.None));
             currentFence = 1;
 
-            // Create the main command list
-            commandList = Collect(device.CreateCommandList(CommandListType.Direct, commandListAllocator, pipelineState));
-
             // Close command list
             commandList.Close();
             commandQueue.ExecuteCommandList(commandList);
@@ -506,6 +568,8 @@ namespace HelloWorld
 
             // Wait the command list to complete
             WaitForPrevFrame();
+
+            buf.Dispose();
         }
 
         /// <summary>
@@ -524,7 +588,7 @@ namespace HelloWorld
             commandList.SetScissorRectangles(scissorRectangle);
             var view = Matrix.LookAtLH(new Vector3(0, 0, -5), Vector3.Zero, Vector3.UnitY);
             var proj = Matrix.PerspectiveFovLH(MathUtil.Pi / 4, (float)width / height, 0.1f, 100);
-            var world = Matrix.Scaling(0.1f) * Matrix.RotationY((float)time) * Matrix.RotationX((float)time / 2);
+            var world = Matrix.Scaling(0.3f) * Matrix.RotationY((float)time) * Matrix.RotationX((float)time / 2);
             var wvpT = world * view * proj;
             wvpT.Transpose();
             var ptr = transform.Map(0);
