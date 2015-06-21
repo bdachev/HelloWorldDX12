@@ -72,7 +72,6 @@ namespace HelloWorld
         private Resource instancesBuffer;
         private VertexBufferView[] instancesBufferView;
 #endif
-        private CpuDescriptorHandle[] descriptorsRT = new CpuDescriptorHandle[1];
 #if USE_TEXTURE
         private DescriptorHeap[] descriptorsHeaps = new DescriptorHeap[2];
         private DescriptorHeap descriptorHeapCB;
@@ -197,8 +196,8 @@ namespace HelloWorld
             };
 
             // enable debug layer
-            using (var deviceDebug = Device.GetDeviceDebug())
-                deviceDebug.EnableDebugLayer();
+            using (var debugInterface = DebugInterface.Get())
+                debugInterface.EnableDebugLayer();
 
             // create device
             using (var factory = new Factory4())
@@ -207,9 +206,9 @@ namespace HelloWorld
                 //{
                 //    device = Collect(new Device(warpAdapter, FeatureLevel.Level_12_0));
                 //}
-                using (var warpAdapter = factory.Adapters[1])
+                using (var adapter = factory.Adapters[1])
                 {
-                    device = Collect(new Device(warpAdapter, FeatureLevel.Level_11_0));
+                    device = Collect(new Device(adapter, FeatureLevel.Level_11_0));
                 }
                 commandQueue = Collect(device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct)));
                 using (var sc1 = new SwapChain(factory, commandQueue, swapChainDescription))
@@ -236,7 +235,6 @@ namespace HelloWorld
                 Type = DescriptorHeapType.RenderTargetView,
                 DescriptorCount = 1
             }));
-            descriptorsRT[0] = descriptorHeapRT.CPUDescriptorHandleForHeapStart;
 #if USE_DEPTH
             descriptorHeapDS = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
             {
@@ -292,6 +290,7 @@ namespace HelloWorld
                 RenderTargetCount = 1,
                 PrimitiveTopologyType = PrimitiveTopologyType.Triangle,
                 SampleMask = -1,
+                StreamOutput = new StreamOutputDescription()
             };
             psd.RenderTargetFormats[0] = Format.R16G16B16A16_Float;
 #if USE_DEPTH
@@ -485,11 +484,8 @@ namespace HelloWorld
                     buf.Unmap(0);
                     bmp.UnlockBits(bmpData);
 
-                    var src = new TextureCopyLocation
-                    {
-                        Resource = buf.NativePointer,
-                        Type = TextureCopyType.PlacedFootprint,
-                        PlacedFootprint = new PlacedSubResourceFootprint
+                    var src = new TextureCopyLocation(buf,
+                        new PlacedSubResourceFootprint
                         {
                             Offset = 0,
                             Footprint = new SubResourceFootprint
@@ -501,13 +497,8 @@ namespace HelloWorld
                                 RowPitch = rowPitch
                             }
                         }
-                    };
-                    var dst = new TextureCopyLocation
-                    {
-                        Resource = texture.NativePointer,
-                        Type = TextureCopyType.SubResourceIndex,
-                        SubresourceIndex = 0,
-                    };
+                    );
+                    var dst = new TextureCopyLocation(texture, 0);
                     // record copy
                     commandList.CopyTextureRegion(dst, 0, 0, 0, src, null);
 
@@ -568,8 +559,9 @@ namespace HelloWorld
 
             // Wait the command list to complete
             WaitForPrevFrame();
-
+#if USE_TEXTURE
             buf.Dispose();
+#endif
         }
 
         /// <summary>
@@ -599,8 +591,8 @@ namespace HelloWorld
             commandList.SetGraphicsRootConstantBufferView(0, transform.GPUVirtualAddress);
 #if USE_TEXTURE
             commandList.SetDescriptorHeaps(2, descriptorsHeaps);
-            commandList.Descriptors.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
-            commandList.Descriptors.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
+            commandList.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
+            commandList.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
 #endif
             // Use barrier to notify that we are using the RenderTarget to clear it
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.Present, ResourceStates.RenderTarget);
@@ -610,16 +602,16 @@ namespace HelloWorld
             commandList.ClearRenderTargetView(descriptorHeapRT.CPUDescriptorHandleForHeapStart, new Color4((float)Math.Sin(time) * 0.25f + 0.5f, (float)Math.Sin(time * 0.5f) * 0.4f + 0.6f, 0.4f, 1.0f), 0, null);
 #if USE_DEPTH
             commandList.ClearDepthStencilView(descriptorHeapDS.CPUDescriptorHandleForHeapStart, ClearFlags.FlagsDepth, 1, 0, 0, null);
-            commandList.SetRenderTargets(1, descriptorsRT, true, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
+            commandList.SetRenderTargets(1, descriptorHeapRT.CPUDescriptorHandleForHeapStart, true, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
 #else
-            commandList.SetRenderTargets(1, descriptorsRT, true, null);
+            commandList.SetRenderTargets(1, descriptorHeapRT.CPUDescriptorHandleForHeapStart, true, null);
 #endif
             commandList.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
-            commandList.SetVertexBuffers(0, 1, vertexBufferView);
+            commandList.SetVertexBuffers(0, vertexBufferView, 1);
 #if USE_INSTANCES
-            commandList.SetVertexBuffers(1, 1, instancesBufferView);
+            commandList.SetVertexBuffers(1, instancesBufferView, 1);
 #if USE_INDICES
-            commandList.IndexBuffer = indexBufferView;
+            commandList.SetIndexBuffer(indexBufferView);
             commandList.DrawIndexedInstanced(34, 7, 0, 0, 0);
 #else
             commandList.DrawInstanced(34, 7, 0, 0);
