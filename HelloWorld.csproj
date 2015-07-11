@@ -56,6 +56,12 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
+  <PropertyGroup>
+    <Windows10KitsPath>$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</Windows10KitsPath>
+    <WindowsKitsPath Condition=" '$(Windows10KitsPath)' != '' ">$(Windows10KitsPath)</WindowsKitsPath>
+    <WindowsKitsPath Condition=" '$(WindowsKitsPath)' == '' ">$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot81)</WindowsKitsPath>
+    <WindowsKitsPath Condition=" '$(WindowsKitsPath)' == '' ">$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot)</WindowsKitsPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="SharpDX, Version=3.0.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -104,7 +110,7 @@
       <SEntry>PS</SEntry>
       <Visible>false</Visible>
     </ShaderOutput>
-    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.rs">
+    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.rs" Condition=" '$(Windows10KitsPath)' != '' ">
       <Source>Cube.fx</Source>
       <SType>rootsig_1_0</SType>
       <SEntry>MyRS1</SEntry>
@@ -125,9 +131,6 @@
   </Target>
   -->
   <Target Name="BuildShaders" Inputs="@(ShaderCode)" Outputs="@(ShaderOutput)">
-    <PropertyGroup>
-      <WindowsKitsPath>$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</WindowsKitsPath>
-    </PropertyGroup>
     <Exec Outputs="%(ShaderOutput.Identity)" Command="&quot;$(WindowsKitsPath)bin\x86\fxc.exe&quot; /nologo /Fc &quot;%(ShaderOutput.Identity).asm&quot; /Fo &quot;%(ShaderOutput.Identity)&quot; /T %(ShaderOutput.SType) /E %(ShaderOutput.SEntry) %(ShaderOutput.Defines) /O3 &quot;%(ShaderOutput.Source)&quot;" />
     <ItemGroup>
       <EmbeddedResource Include="@(ShaderOutput)">

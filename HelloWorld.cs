@@ -443,11 +443,11 @@ namespace HelloWorld
             Resource buf;
             using (var bmp = new System.Drawing.Bitmap("GeneticaMortarlessBlocks.jpg"))
             {
-                int width = bmp.Width, height = bmp.Height;
+                int w = bmp.Width, h = bmp.Height;
                 var descrs = new[]
                 {
                     new ResourceDescription(ResourceDimension.Texture2D,
-                                            0, width, height, 1, 1,
+                                            0, w, h, 1, 1,
                                             Format.B8G8R8A8_UNorm, 1, 0,
                                             TextureLayout.Unknown,
                                             ResourceFlags.None),
@@ -474,12 +474,12 @@ namespace HelloWorld
                                                 ResourceStates.GenericRead);
                 {
                     var ptrBuf = buf.Map(0);
-                    var bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, width, height), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                    var bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
                     var ptrDst = ptrBuf;
                     var ptrSrc = bmpData.Scan0;
                     int rowPitch = (bmpData.Stride + 255) / 256 * 256;
-                    for (int y = 0; y < height; y++, ptrDst += rowPitch, ptrSrc += bmpData.Stride)
+                    for (int y = 0; y < h; y++, ptrDst += rowPitch, ptrSrc += bmpData.Stride)
                         Utilities.CopyMemory(ptrDst, ptrSrc, bmpData.Stride);
                     buf.Unmap(0);
                     bmp.UnlockBits(bmpData);
@@ -491,8 +491,8 @@ namespace HelloWorld
                             Footprint = new SubResourceFootprint
                             {
                                 Format = Format.B8G8R8A8_UNorm_SRgb,
-                                Width = width,
-                                Height = height,
+                                Width = w,
+                                Height = h,
                                 Depth = 1,
                                 RowPitch = rowPitch
                             }
@@ -524,19 +524,19 @@ namespace HelloWorld
 
 #if USE_DEPTH
             depthBuffer = Collect(device.CreateCommittedResource(
-            new HeapProperties(HeapType.Default),
-            HeapFlags.None,
-            new ResourceDescription(ResourceDimension.Texture2D, 0, width, height, 1, 1, Format.D32_Float, 1, 0, TextureLayout.Unknown, ResourceFlags.AllowDepthStencil),
-            ResourceStates.Present,
-            new ClearValue
-            {
-                Format = Format.D32_Float,
-                DepthStencil = new DepthStencilValue
+                new HeapProperties(HeapType.Default),
+                HeapFlags.None,
+                new ResourceDescription(ResourceDimension.Texture2D, 0, width, height, 1, 1, Format.D32_Float, 1, 0, TextureLayout.Unknown, ResourceFlags.AllowDepthStencil),
+                ResourceStates.Present,
+                new ClearValue
                 {
-                    Depth = 1,
-                    Stencil = 0,
-                }
-            }));
+                    Format = Format.D32_Float,
+                    DepthStencil = new DepthStencilValue
+                    {
+                        Depth = 1,
+                        Stencil = 0,
+                    }
+                }));
             device.CreateDepthStencilView(depthBuffer, null, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
 #endif
 
