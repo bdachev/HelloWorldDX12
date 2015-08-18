@@ -259,54 +259,39 @@ namespace HelloWorld
             descriptorsHeaps[1] = descriptorHeapS;
 #endif
 #if true // root signature in code 
-            var descrRanges = new DescriptorRange[]
-            {
-                new DescriptorRange
-                {
-                    RangeType = DescriptorRangeType.ShaderResourceView,
-                    BaseShaderRegister = 0,
-                    DescriptorCount = 1,
-                },
-                new DescriptorRange
-                {
-                    RangeType = DescriptorRangeType.Sampler,
-                    BaseShaderRegister = 0,
-                    DescriptorCount = 1,
-                },
-            };
-            var gch = GCHandle.Alloc(descrRanges, GCHandleType.Pinned);
             var rsparams = new RootParameter[]
             {
-                new RootParameter
+                new RootParameter(new RootDescriptor(), RootParameterType.ConstantBufferView)
                 {
-                    ParameterType = RootParameterType.ConstantBufferView,
                     ShaderVisibility = ShaderVisibility.Vertex,
-                    Descriptor = new RootDescriptor(),
                 },
-                new RootParameter
+                new RootParameter(new []
                 {
-                    ParameterType = RootParameterType.DescriptorTable,
-                    ShaderVisibility = ShaderVisibility.Pixel,
-                    DescriptorTable = new RootDescriptorTable
+                    new DescriptorRange
                     {
-                        DescriptorRangeCount = 1,
-                        PDescriptorRanges = Marshal.UnsafeAddrOfPinnedArrayElement(descrRanges, 0)
+                        RangeType = DescriptorRangeType.ShaderResourceView,
+                        BaseShaderRegister = 0,
+                        DescriptorCount = 1,
                     },
+                })
+                {
+                    ShaderVisibility = ShaderVisibility.Pixel,
                 },
-                new RootParameter
+                new RootParameter(new []
                 {
-                    ParameterType = RootParameterType.DescriptorTable,
-                    ShaderVisibility = ShaderVisibility.Pixel,
-                    DescriptorTable = new RootDescriptorTable
+                    new DescriptorRange
                     {
-                        DescriptorRangeCount = 1,
-                        PDescriptorRanges = Marshal.UnsafeAddrOfPinnedArrayElement(descrRanges, 1)
+                        RangeType = DescriptorRangeType.Sampler,
+                        BaseShaderRegister = 0,
+                        DescriptorCount = 1,
                     },
+                })
+                {
+                    ShaderVisibility = ShaderVisibility.Pixel,
                 },
             };
             var rs = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rsparams);
             rootSignature = Collect(device.CreateRootSignature(rs.Serialize()));
-            gch.Free();
 #else
             var rootSignatureByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.rs"));
             using (var bufferRootSignature = DataBuffer.Create(rootSignatureByteCode))
