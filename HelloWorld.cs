@@ -261,34 +261,21 @@ namespace HelloWorld
 #if true // root signature in code 
             var rsparams = new RootParameter[]
             {
-                new RootParameter(new RootDescriptor(), RootParameterType.ConstantBufferView)
-                {
-                    ShaderVisibility = ShaderVisibility.Vertex,
-                },
-                new RootParameter(new []
-                {
+                new RootParameter(ShaderVisibility.Vertex, new RootDescriptor(), RootParameterType.ConstantBufferView),
+                new RootParameter(ShaderVisibility.Pixel,
                     new DescriptorRange
                     {
                         RangeType = DescriptorRangeType.ShaderResourceView,
                         BaseShaderRegister = 0,
                         DescriptorCount = 1,
-                    },
-                })
-                {
-                    ShaderVisibility = ShaderVisibility.Pixel,
-                },
-                new RootParameter(new []
-                {
+                    }),
+                new RootParameter(ShaderVisibility.Pixel,
                     new DescriptorRange
                     {
                         RangeType = DescriptorRangeType.Sampler,
                         BaseShaderRegister = 0,
                         DescriptorCount = 1,
-                    },
-                })
-                {
-                    ShaderVisibility = ShaderVisibility.Pixel,
-                },
+                    }),
             };
             var rs = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rsparams);
             rootSignature = Collect(device.CreateRootSignature(rs.Serialize()));
