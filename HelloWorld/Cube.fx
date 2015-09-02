@@ -17,6 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+//#define USE_TEXTURE
 #define MyRS1 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
               "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
               "DescriptorTable( SRV(t0, numDescriptors = 1), " \
@@ -43,8 +44,11 @@ cbuffer worldMatrix : register(b0)
 {
 	float4x4 WorldViewProj;
 };
+
+#ifdef USE_TEXTURE
 Texture2D<float4> tex : register(t0);
 sampler sampl : register(s0);
+#endif
 
 
 PS_IN VS( VS_IN input )
@@ -60,6 +64,9 @@ PS_IN VS( VS_IN input )
 
 float4 PS( PS_IN input ) : SV_Target
 {
-	//return float4(input.tex, 1, 1);
+#ifdef USE_TEXTURE
 	return tex.Sample(sampl, input.tex);
+#else
+	return float4(input.tex, 1, 1);
+#endif
 }

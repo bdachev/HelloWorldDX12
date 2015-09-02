@@ -21,12 +21,18 @@
 #define USE_DEPTH
 #define USE_INSTANCES
 #define USE_INDICES
-#define USE_TEXTURE
+//#define USE_TEXTURE
 
 using System;
 using System.Diagnostics;
 using System.Threading;
+#if NETFX_CORE
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
+using Windows.ApplicationModel;
+#else
 using System.Windows.Forms;
+#endif
 using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.DXGI;
@@ -34,18 +40,47 @@ using SharpDX.DXGI;
 namespace HelloWorld
 {
     using SharpDX.Direct3D12;
+    using System.IO;
+    using System.Reflection;
     using System.Runtime.InteropServices;
-
+    using System.Threading.Tasks;
 
     /// <summary>
     /// HelloWorldD3D12 sample demonstrating clearing the screen. with D3D12 API.
     /// </summary>
     public class HelloWorld : DisposeCollector
     {
+#if NETFX_CORE
+        [DllImport("kernel32.dll", SetLastError = true, CallingConvention = CallingConvention.Winapi, CharSet = CharSet.Unicode)]
+        public static extern IntPtr CreateEventW(IntPtr lpEventAttributes,
+                                                [In, MarshalAs(UnmanagedType.Bool)] bool bManualReset,
+                                                [In, MarshalAs(UnmanagedType.Bool)] bool bIntialState,
+                                                [In, MarshalAs(UnmanagedType.BStr)] string lpName);
+
+        [DllImport("kernel32.dll", SetLastError = true, CallingConvention = CallingConvention.Winapi, CharSet = CharSet.Unicode)]
+        public static extern bool CloseHandle([In]IntPtr hObject);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern Int32 WaitForSingleObject(IntPtr Handle, Int32 Wait);
+
+        public const Int32 INFINITE = -1;
+        public const Int32 WAIT_ABANDONED = 0x80;
+        public const Int32 WAIT_OBJECT_0 = 0x00;
+        public const Int32 WAIT_TIMEOUT = 0x102;
+        public const Int32 WAIT_FAILED = -1;
+
+        private IntPtr eventHandle;
+#else
+        private AutoResetEvent eventHandle;
+#endif
         private const int SwapBufferCount = 3;
+#if NETFX_CORE
+        private SwapChainPanel panel;
+#else
         private Form form;
-        private int width;
-        private int height;
+#endif
+        private int width, newWidth;
+        private int height, newHeight;
         private Device device;
         private CommandAllocator commandListAllocator;
         private CommandQueue commandQueue;
@@ -59,7 +94,6 @@ namespace HelloWorld
 #endif
         private Rectangle scissorRectangle;
         private ViewportF viewPort;
-        private AutoResetEvent eventHandle;
         private Fence fence;
         private PipelineState pipelineState;
         private RootSignature rootSignature;
@@ -91,20 +125,35 @@ namespace HelloWorld
             clock = Stopwatch.StartNew();
         }
 
+        public void Resize(int width, int height)
+        {
+            newWidth = width;
+            newHeight = height;
+        }
+
+#if NETFX_CORE
         /// <summary>
         /// Initializes this instance.
         /// </summary>
-        /// <param name="form">The form.</param>
+        public void Initialize(SwapChainPanel panel)
+        {
+            this.panel = panel;
+            newWidth = width = (int)panel.ActualWidth;
+            newHeight = height = (int)panel.ActualHeight;
+#else
+        /// <summary>
+        /// Initializes this instance.
+        /// </summary>
         public void Initialize(Form form)
         {
             this.form = form;
-            width = form.ClientSize.Width;
-            height = form.ClientSize.Height;
+            newWidth = width = form.ClientSize.Width;
+            newHeight = height = form.ClientSize.Height;
+#endif
 
-            LoadPipeline(form);
+            LoadPipeline();
             LoadAssets();
         }
-
         /// <summary>
         /// Updates this instance.
         /// </summary>
@@ -130,10 +179,10 @@ namespace HelloWorld
             WaitForPrevFrame();
 
             RemoveAndDispose(ref renderTarget);
-            if (width != form.ClientSize.Width || height != form.ClientSize.Height)
+            if (width != newWidth || height != newHeight)
             {
-                width = form.ClientSize.Width;
-                height = form.ClientSize.Height;
+                width = newWidth;
+                height = newHeight;
                 swapChain.ResizeBuffers(SwapBufferCount, width, height, Format.Unknown, SwapChainFlags.None);
 #if USE_DEPTH
                 RemoveAndDispose(ref depthBuffer);
@@ -171,9 +220,13 @@ namespace HelloWorld
             // wait for the GPU to be done with all resources
             WaitForPrevFrame();
 
-            swapChain.SetFullscreenState(false, null);
-            
-            eventHandle.Close();
+            //swapChain.SetFullscreenState(false, null);
+
+#if NETFX_CORE
+            CloseHandle(eventHandle);
+#else
+            eventHandle.Dispose();
+#endif
 
             base.Dispose(disposeManagedResources);
         }
@@ -181,19 +234,19 @@ namespace HelloWorld
         /// <summary>
         /// Creates the rendering pipeline.
         /// </summary>
-        /// <param name="form">The form.</param>
-        private void LoadPipeline(Form form)
+        private void LoadPipeline()
         {
             // create swap chain descriptor
-            var swapChainDescription = new SwapChainDescription()
+            var swapChainDescription1 = new SwapChainDescription1()
             {
+                AlphaMode = AlphaMode.Unspecified,
                 BufferCount = SwapBufferCount,
-                ModeDescription = new ModeDescription(Format.R16G16B16A16_Float),
                 Usage = Usage.RenderTargetOutput,
-                OutputHandle = form.Handle,
                 SwapEffect = SwapEffect.FlipSequential,
                 SampleDescription = new SampleDescription(1, 0),
-                IsWindowed = true
+                Format = Format.R16G16B16A16_Float,
+                Width = width,
+                Height = height
             };
 
             // enable debug layer
@@ -215,12 +268,39 @@ namespace HelloWorld
                 }
 #endif
                 commandQueue = Collect(device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct)));
-                using (var sc1 = new SwapChain(factory, commandQueue, swapChainDescription))
+
+#if NETFX_CORE
+                using (var sc1 = new SwapChain1(factory, commandQueue, ref swapChainDescription1))
+                {
                     swapChain = Collect(sc1.QueryInterface<SwapChain3>());
+                    using (var comPtr = new ComObject(panel))
+                    {
+                        using (var native = comPtr.QueryInterface<ISwapChainPanelNative>())
+                        {
+                            native.SwapChain = swapChain;
+                        }
+                    }
+                }
+#else
+                using (var sc1 = new SwapChain1(factory, commandQueue, form.Handle, ref swapChainDescription1))
+                    swapChain = Collect(sc1.QueryInterface<SwapChain3>());
+#endif
             }
 
             // create command queue and allocator objects
             commandListAllocator = Collect(device.CreateCommandAllocator(CommandListType.Direct));
+        }
+
+        byte[] GetResourceBytes(string name)
+        {
+#if NETFX_CORE
+            var location = Package.Current.InstalledLocation;
+            using (var stream = location.OpenStreamForReadAsync("Shaders\\" + name).Result)
+                return Utilities.ReadStream(stream);
+#else
+            using (var stream = typeof(HelloWorld).Assembly.GetManifestResourceStream("Shaders." + name))
+                return Utilities.ReadStream(stream);
+#endif
         }
 
         /// <summary>
@@ -228,8 +308,6 @@ namespace HelloWorld
         /// </summary>
         private void LoadAssets()
         {
-            var assembly = typeof(HelloWorld).Assembly;
-
             // Create the main command list
             commandList = Collect(device.CreateCommandList(CommandListType.Direct, commandListAllocator, pipelineState));
 
@@ -266,6 +344,7 @@ namespace HelloWorld
             var rsparams = new RootParameter[]
             {
                 new RootParameter(ShaderVisibility.Vertex, new RootDescriptor(), RootParameterType.ConstantBufferView),
+#if USE_TEXTURE
                 new RootParameter(ShaderVisibility.Pixel,
                     new DescriptorRange
                     {
@@ -280,6 +359,7 @@ namespace HelloWorld
                         BaseShaderRegister = 0,
                         DescriptorCount = 1,
                     }),
+#endif
             };
             var rs = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rsparams);
             rootSignature = Collect(device.CreateRootSignature(rs.Serialize()));
@@ -288,8 +368,8 @@ namespace HelloWorld
             using (var bufferRootSignature = DataBuffer.Create(rootSignatureByteCode))
                 rootSignature = Collect(device.CreateRootSignature(bufferRootSignature));
 #endif
-            var vertexShaderByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.vso"));
-            var pixelShaderByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.pso"));
+            byte[] vertexShaderByteCode = GetResourceBytes("Cube.vso");
+            byte[] pixelShaderByteCode = GetResourceBytes("Cube.pso");
 
             var layout = new InputLayoutDescription(new InputElement[]
             {
@@ -581,7 +661,11 @@ namespace HelloWorld
             commandQueue.ExecuteCommandList(commandList);
 
             // Create an event handle use for VTBL
+#if NETFX_CORE
+            eventHandle = CreateEventW(IntPtr.Zero, false, false, null);
+#else
             eventHandle = new AutoResetEvent(false);
+#endif
 
             // Wait the command list to complete
             WaitForPrevFrame();
@@ -671,9 +755,15 @@ namespace HelloWorld
             currentFence++;
 
             if (fence.CompletedValue < localFence)
-            {                
+            {
+#if NETFX_CORE
+                fence.SetEventOnCompletion(localFence, eventHandle);
+                WaitForSingleObject(eventHandle, INFINITE);
+
+#else
                 fence.SetEventOnCompletion(localFence, eventHandle.SafeWaitHandle.DangerousGetHandle());
                 eventHandle.WaitOne();
+#endif
             }
         }
     }

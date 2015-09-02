@@ -33,6 +33,8 @@ namespace HelloWorld
             using (var helloTriangle = new HelloWorld())
             {
                 form.Show();
+                form.ClientSizeChanged += (o, e) => helloTriangle.Resize(form.ClientSize.Width, form.ClientSize.Height);
+
                 helloTriangle.Initialize(form);
 
                 using (var loop = new RenderLoop(form))
