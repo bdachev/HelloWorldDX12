@@ -17,6 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
+#define USE_WARP
 #define USE_DEPTH
 #define USE_INSTANCES
 #define USE_INDICES
@@ -202,14 +203,17 @@ namespace HelloWorld
             // create device
             using (var factory = new Factory4())
             {
-                //using (var warpAdapter = factory.WarpAdapter)
-                //{
-                //    device = Collect(new Device(warpAdapter, FeatureLevel.Level_12_0));
-                //}
+#if USE_WARP
+                using (var warpAdapter = factory.GetWarpAdapter())
+                {
+                    device = Collect(new Device(warpAdapter, FeatureLevel.Level_12_0));
+                }
+#else
                 using (var adapter = factory.Adapters[1])
                 {
                     device = Collect(new Device(adapter, FeatureLevel.Level_11_0));
                 }
+#endif
                 commandQueue = Collect(device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct)));
                 using (var sc1 = new SwapChain(factory, commandQueue, swapChainDescription))
                     swapChain = Collect(sc1.QueryInterface<SwapChain3>());

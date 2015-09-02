@@ -67,24 +67,24 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="SharpDX, Version=3.0.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\SharpDX\Bin\Desktop\SharpDX.dll</HintPath>
+      <HintPath>..\packages\SharpDX.3.0.0-beta01\lib\net45\SharpDX.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="SharpDX.Desktop, Version=3.0.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\SharpDX\Bin\Desktop\SharpDX.Desktop.dll</HintPath>
+      <HintPath>..\packages\SharpDX.Desktop.3.0.0-beta01\lib\net45\SharpDX.Desktop.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="SharpDX.Direct3D12, Version=3.0.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\SharpDX\Bin\Desktop\SharpDX.Direct3D12.dll</HintPath>
+      <HintPath>..\packages\SharpDX.Direct3D12.3.0.0-beta01\lib\net45\SharpDX.Direct3D12.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="SharpDX.DXGI, Version=3.0.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\SharpDX\Bin\Desktop\SharpDX.DXGI.dll</HintPath>
+      <HintPath>..\packages\SharpDX.DXGI.3.0.0-beta01\lib\net45\SharpDX.DXGI.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="SharpDX.Mathematics, Version=3.0.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\SharpDX\Bin\Desktop\SharpDX.Mathematics.dll</HintPath>
+      <HintPath>..\packages\SharpDX.Mathematics.3.0.0-beta01\lib\net45\SharpDX.Mathematics.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -124,6 +124,9 @@
     <Content Include="GeneticaMortarlessBlocks.jpg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
