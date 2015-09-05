@@ -244,7 +244,7 @@ namespace HelloWorld
                 Usage = Usage.RenderTargetOutput,
                 SwapEffect = SwapEffect.FlipSequential,
                 SampleDescription = new SampleDescription(1, 0),
-                Format = Format.R16G16B16A16_Float,
+                Format = Format.R8G8B8A8_UNorm,
                 Width = width,
                 Height = height
             };
@@ -398,7 +398,7 @@ namespace HelloWorld
                 SampleMask = -1,
                 StreamOutput = new StreamOutputDescription()
             };
-            psd.RenderTargetFormats[0] = Format.R16G16B16A16_Float;
+            psd.RenderTargetFormats[0] = Format.R8G8B8A8_UNorm;
 #if USE_DEPTH
             psd.DepthStencilFormat = Format.D32_Float;
 #else

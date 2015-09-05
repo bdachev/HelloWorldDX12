@@ -25,6 +25,7 @@ namespace HelloWorldUniversal
     public sealed partial class MainPage : Page
     {
         HelloWorld _helloWorld;
+        DispatcherTimer _timer;
 
         void UpdateAndRender()
         {
@@ -32,8 +33,6 @@ namespace HelloWorldUniversal
             {
                 _helloWorld.Update();
                 _helloWorld.Render();
-
-                Dispatcher.RunAsync(CoreDispatcherPriority.Normal, UpdateAndRender);
             }
         }
 
@@ -45,12 +44,24 @@ namespace HelloWorldUniversal
             {
                 _helloWorld = new HelloWorld();
                 _helloWorld.Initialize(__SwapChainPanel);
+                __SwapChainPanel.SizeChanged += (o1, e1) =>
+                {
+                    _helloWorld.Resize((int)__SwapChainPanel.ActualWidth, (int)__SwapChainPanel.ActualHeight);
+                };
 
-                Dispatcher.RunAsync(CoreDispatcherPriority.Normal, UpdateAndRender);
+                _timer = new DispatcherTimer();
+                _timer.Interval = TimeSpan.FromMilliseconds(10);
+                _timer.Tick += (o1, e1) => UpdateAndRender();
+                _timer.Start();
             };
 
             Unloaded += (o, e) =>
             {
+                if (_timer != null)
+                {
+                    _timer.Stop();
+                    _timer = null;
+                }
                 if (_helloWorld != null)
                 {
                     _helloWorld.Dispose();
