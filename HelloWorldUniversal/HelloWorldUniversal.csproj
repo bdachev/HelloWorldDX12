@@ -108,6 +108,7 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
+    <Compile Include="HelloWorldWinRT.cs" />
     <Compile Include="MainPage.xaml.cs">
       <DependentUpon>MainPage.xaml</DependentUpon>
     </Compile>
@@ -123,6 +124,9 @@
     <ShaderCode Include="..\HelloWorld\Cube.fx">
       <Link>Cube.fx</Link>
     </ShaderCode>
+    <Content Include="..\HelloWorld\GeneticaMortarlessBlocks.jpg">
+      <Link>GeneticaMortarlessBlocks.jpg</Link>
+    </Content>
     <Content Include="Properties\Default.rd.xml" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />
     <Content Include="Assets\SplashScreen.scale-200.png" />
@@ -174,12 +178,11 @@
   </Target>
   -->
   <Target Name="BuildShaders" Inputs="@(ShaderCode)" Outputs="@(ShaderOutput -> 'Shaders\%(Identity)')">
-    <Exec Outputs="Shaders\%(ShaderOutput.Identity)" 
-		  Command="&quot;$(FXC_EXE)&quot; /nologo /Fc&quot;$(IntermediateOutputPath)%(ShaderOutput.Identity).asm&quot; /Fo &quot;$(IntermediateOutputPath)%(ShaderOutput.Identity)&quot; /T %(ShaderOutput.SType) /E %(ShaderOutput.SEntry) %(ShaderOutput.Defines) /O3 &quot;%(ShaderOutput.Source)&quot;" />
+    <Exec Outputs="Shaders\%(ShaderOutput.Identity)" Command="&quot;$(FXC_EXE)&quot; /nologo /Fc&quot;$(IntermediateOutputPath)%(ShaderOutput.Identity).asm&quot; /Fo &quot;$(IntermediateOutputPath)%(ShaderOutput.Identity)&quot; /T %(ShaderOutput.SType) /E %(ShaderOutput.SEntry) %(ShaderOutput.Defines) /O3 &quot;%(ShaderOutput.Source)&quot;" />
     <ItemGroup>
       <Content Include="$(IntermediateOutputPath)%(ShaderOutput.Identity)">
-		<Link>Shaders\%(ShaderOutput.Identity)</Link>
-	  </Content>
+        <Link>Shaders\%(ShaderOutput.Identity)</Link>
+      </Content>
     </ItemGroup>
   </Target>
   <Target Name="CleanShaders">

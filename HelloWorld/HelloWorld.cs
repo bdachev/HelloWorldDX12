@@ -21,64 +21,27 @@
 #define USE_DEPTH
 #define USE_INSTANCES
 #define USE_INDICES
-//#define USE_TEXTURE
+#define USE_TEXTURE
 
-using System;
-using System.Diagnostics;
-using System.Threading;
-#if NETFX_CORE
-using Windows.UI.Xaml;
-using Windows.UI.Xaml.Controls;
-using Windows.ApplicationModel;
-#else
-using System.Windows.Forms;
-#endif
 using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.DXGI;
+using SharpDX.Direct3D12;
+using System;
+using System.Diagnostics;
+using Device = SharpDX.Direct3D12.Device;
+using Resource = SharpDX.Direct3D12.Resource;
 
 namespace HelloWorld
 {
-    using SharpDX.Direct3D12;
-    using System.IO;
-    using System.Reflection;
-    using System.Runtime.InteropServices;
-    using System.Threading.Tasks;
 
     /// <summary>
     /// HelloWorldD3D12 sample demonstrating clearing the screen. with D3D12 API.
     /// </summary>
-    public class HelloWorld : DisposeCollector
+    public partial class HelloWorld : DisposeCollector
     {
-#if NETFX_CORE
-        [DllImport("kernel32.dll", SetLastError = true, CallingConvention = CallingConvention.Winapi, CharSet = CharSet.Unicode)]
-        public static extern IntPtr CreateEventW(IntPtr lpEventAttributes,
-                                                [In, MarshalAs(UnmanagedType.Bool)] bool bManualReset,
-                                                [In, MarshalAs(UnmanagedType.Bool)] bool bIntialState,
-                                                [In, MarshalAs(UnmanagedType.BStr)] string lpName);
-
-        [DllImport("kernel32.dll", SetLastError = true, CallingConvention = CallingConvention.Winapi, CharSet = CharSet.Unicode)]
-        public static extern bool CloseHandle([In]IntPtr hObject);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern Int32 WaitForSingleObject(IntPtr Handle, Int32 Wait);
-
-        public const Int32 INFINITE = -1;
-        public const Int32 WAIT_ABANDONED = 0x80;
-        public const Int32 WAIT_OBJECT_0 = 0x00;
-        public const Int32 WAIT_TIMEOUT = 0x102;
-        public const Int32 WAIT_FAILED = -1;
-
-        private IntPtr eventHandle;
-#else
-        private AutoResetEvent eventHandle;
-#endif
         private const int SwapBufferCount = 3;
-#if NETFX_CORE
-        private SwapChainPanel panel;
-#else
-        private Form form;
-#endif
+
         private int width, newWidth;
         private int height, newHeight;
         private Device device;
@@ -131,29 +94,6 @@ namespace HelloWorld
             newHeight = height;
         }
 
-#if NETFX_CORE
-        /// <summary>
-        /// Initializes this instance.
-        /// </summary>
-        public void Initialize(SwapChainPanel panel)
-        {
-            this.panel = panel;
-            newWidth = width = (int)panel.ActualWidth;
-            newHeight = height = (int)panel.ActualHeight;
-#else
-        /// <summary>
-        /// Initializes this instance.
-        /// </summary>
-        public void Initialize(Form form)
-        {
-            this.form = form;
-            newWidth = width = form.ClientSize.Width;
-            newHeight = height = form.ClientSize.Height;
-#endif
-
-            LoadPipeline();
-            LoadAssets();
-        }
         /// <summary>
         /// Updates this instance.
         /// </summary>
@@ -222,19 +162,15 @@ namespace HelloWorld
 
             //swapChain.SetFullscreenState(false, null);
 
-#if NETFX_CORE
-            CloseHandle(eventHandle);
-#else
-            eventHandle.Dispose();
-#endif
-
             base.Dispose(disposeManagedResources);
+
+            CloseWaitEvent();
         }
 
         /// <summary>
         /// Creates the rendering pipeline.
         /// </summary>
-        private void LoadPipeline()
+        void LoadPipeline()
         {
             // create swap chain descriptor
             var swapChainDescription1 = new SwapChainDescription1()
@@ -269,44 +205,17 @@ namespace HelloWorld
 #endif
                 commandQueue = Collect(device.CreateCommandQueue(new CommandQueueDescription(CommandListType.Direct)));
 
-#if NETFX_CORE
-                using (var sc1 = new SwapChain1(factory, commandQueue, ref swapChainDescription1))
-                {
-                    swapChain = Collect(sc1.QueryInterface<SwapChain3>());
-                    using (var comPtr = new ComObject(panel))
-                    {
-                        using (var native = comPtr.QueryInterface<ISwapChainPanelNative>())
-                        {
-                            native.SwapChain = swapChain;
-                        }
-                    }
-                }
-#else
-                using (var sc1 = new SwapChain1(factory, commandQueue, form.Handle, ref swapChainDescription1))
-                    swapChain = Collect(sc1.QueryInterface<SwapChain3>());
-#endif
+                CreateSwapChain(ref swapChainDescription1, factory);
             }
 
             // create command queue and allocator objects
             commandListAllocator = Collect(device.CreateCommandAllocator(CommandListType.Direct));
         }
 
-        byte[] GetResourceBytes(string name)
-        {
-#if NETFX_CORE
-            var location = Package.Current.InstalledLocation;
-            using (var stream = location.OpenStreamForReadAsync("Shaders\\" + name).Result)
-                return Utilities.ReadStream(stream);
-#else
-            using (var stream = typeof(HelloWorld).Assembly.GetManifestResourceStream("Shaders." + name))
-                return Utilities.ReadStream(stream);
-#endif
-        }
-
         /// <summary>
         /// Setup resources for rendering
         /// </summary>
-        private void LoadAssets()
+        void LoadAssets()
         {
             // Create the main command list
             commandList = Collect(device.CreateCommandList(CommandListType.Direct, commandListAllocator, pipelineState));
@@ -547,9 +456,9 @@ namespace HelloWorld
 #if USE_TEXTURE
 #region texture
             Resource buf;
-            using (var bmp = new System.Drawing.Bitmap("GeneticaMortarlessBlocks.jpg"))
+            using (var tl = new TextureLoader("GeneticaMortarlessBlocks.jpg"))
             {
-                int w = bmp.Width, h = bmp.Height;
+                int w = tl.Width, h = tl.Height;
                 var descrs = new[]
                 {
                     new ResourceDescription(ResourceDimension.Texture2D,
@@ -578,43 +487,35 @@ namespace HelloWorld
                                                     TextureLayout.RowMajor,
                                                     ResourceFlags.None),
                                                 ResourceStates.GenericRead);
-                {
-                    var ptrBuf = buf.Map(0);
-                    var bmpData = bmp.LockBits(new System.Drawing.Rectangle(0, 0, w, h), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
 
-                    var ptrDst = ptrBuf;
-                    var ptrSrc = bmpData.Scan0;
-                    int rowPitch = (bmpData.Stride + 255) / 256 * 256;
-                    for (int y = 0; y < h; y++, ptrDst += rowPitch, ptrSrc += bmpData.Stride)
-                        Utilities.CopyMemory(ptrDst, ptrSrc, bmpData.Stride);
-                    buf.Unmap(0);
-                    bmp.UnlockBits(bmpData);
+                var ptrBuf = buf.Map(0);
+                int rowPitch = tl.CopyImageData(ptrBuf);
+                buf.Unmap(0);
 
-                    var src = new TextureCopyLocation(buf,
-                        new PlacedSubResourceFootprint
+                var src = new TextureCopyLocation(buf,
+                    new PlacedSubResourceFootprint
+                    {
+                        Offset = 0,
+                        Footprint = new SubResourceFootprint
                         {
-                            Offset = 0,
-                            Footprint = new SubResourceFootprint
-                            {
-                                Format = Format.B8G8R8A8_UNorm_SRgb,
-                                Width = w,
-                                Height = h,
-                                Depth = 1,
-                                RowPitch = rowPitch
-                            }
+                            Format = Format.B8G8R8A8_UNorm_SRgb,
+                            Width = w,
+                            Height = h,
+                            Depth = 1,
+                            RowPitch = rowPitch
                         }
-                    );
-                    var dst = new TextureCopyLocation(texture, 0);
-                    // record copy
-                    commandList.CopyTextureRegion(dst, 0, 0, 0, src, null);
+                    }
+                );
+                var dst = new TextureCopyLocation(texture, 0);
+                // record copy
+                commandList.CopyTextureRegion(dst, 0, 0, 0, src, null);
 
-                    commandList.ResourceBarrierTransition(texture, ResourceStates.CopyDestination, ResourceStates.GenericRead);
-                }
+                commandList.ResourceBarrierTransition(texture, ResourceStates.CopyDestination, ResourceStates.GenericRead);
             }
             device.CreateShaderResourceView(texture, null, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
 #endregion texture
 
-#region sampler
+                #region sampler
             device.CreateSampler(new SamplerStateDescription
             {
                 AddressU = TextureAddressMode.Wrap,
@@ -622,10 +523,10 @@ namespace HelloWorld
                 AddressW = TextureAddressMode.Wrap,
                 Filter = Filter.MaximumMinMagMipLinear,
             }, descriptorHeapS.CPUDescriptorHandleForHeapStart);
-#endregion sampler
+                #endregion sampler
 #endif
-            // Get the backbuffer and creates the render target view
-            renderTarget = Collect(swapChain.GetBackBuffer<Resource>(0));
+                // Get the backbuffer and creates the render target view
+                renderTarget = Collect(swapChain.GetBackBuffer<Resource>(0));
             device.CreateRenderTargetView(renderTarget, null, descriptorHeapRT.CPUDescriptorHandleForHeapStart);
 
 #if USE_DEPTH
@@ -661,11 +562,7 @@ namespace HelloWorld
             commandQueue.ExecuteCommandList(commandList);
 
             // Create an event handle use for VTBL
-#if NETFX_CORE
-            eventHandle = CreateEventW(IntPtr.Zero, false, false, null);
-#else
-            eventHandle = new AutoResetEvent(false);
-#endif
+            CreateWaitEvent();
 
             // Wait the command list to complete
             WaitForPrevFrame();
@@ -756,14 +653,7 @@ namespace HelloWorld
 
             if (fence.CompletedValue < localFence)
             {
-#if NETFX_CORE
-                fence.SetEventOnCompletion(localFence, eventHandle);
-                WaitForSingleObject(eventHandle, INFINITE);
-
-#else
-                fence.SetEventOnCompletion(localFence, eventHandle.SafeWaitHandle.DangerousGetHandle());
-                eventHandle.WaitOne();
-#endif
+                SetEventAndWaitForCompletion(localFence);
             }
         }
     }
