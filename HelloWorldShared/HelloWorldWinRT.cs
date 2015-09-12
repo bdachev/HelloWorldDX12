@@ -43,10 +43,10 @@ namespace HelloWorldShared
 
             public TextureLoader(string fileName)
             {
-                Windows.System.Threading.ThreadPool.RunAsync(wi => _bitmapData = LoadFrameAsync(fileName).Result).AsTask().Wait();
+                Task.Run(() => LoadFrameAsync(fileName).Wait()).Wait();
             }
 
-            async Task<byte[]> LoadFrameAsync(string fileName)
+            async Task LoadFrameAsync(string fileName)
             {
                 var file = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///" + fileName));
                 using (var stream = await file.OpenReadAsync())
@@ -57,7 +57,7 @@ namespace HelloWorldShared
                     var data = decoder.BitmapPixelFormat == BitmapPixelFormat.Bgra8 ?
                                     await decoder.GetPixelDataAsync() :
                                     await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, new BitmapTransform(), ExifOrientationMode.RespectExifOrientation, ColorManagementMode.ColorManageToSRgb);
-                    return data.DetachPixelData();
+                    _bitmapData = data.DetachPixelData();
                 }
             }
 
