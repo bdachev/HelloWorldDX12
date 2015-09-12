@@ -30,7 +30,7 @@ namespace HelloWorld
         {
             var form = new RenderForm("HelloWorldD3D12");
 
-            using (var helloTriangle = new HelloWorld())
+            using (var helloTriangle = new HelloWorldShared.HelloWorld())
             {
                 form.Show();
                 form.ClientSizeChanged += (o, e) => helloTriangle.Resize(form.ClientSize.Width, form.ClientSize.Height);

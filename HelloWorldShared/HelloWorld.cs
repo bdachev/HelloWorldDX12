@@ -32,7 +32,7 @@ using System.Diagnostics;
 using Device = SharpDX.Direct3D12.Device;
 using Resource = SharpDX.Direct3D12.Resource;
 
-namespace HelloWorld
+namespace HelloWorldShared
 {
 
     /// <summary>

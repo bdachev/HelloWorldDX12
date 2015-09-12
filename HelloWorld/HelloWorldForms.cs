@@ -7,7 +7,7 @@ using System.Threading;
 using System.Windows.Forms;
 using Rectangle = System.Drawing.Rectangle;
 
-namespace HelloWorld
+namespace HelloWorldShared
 {
     public partial class HelloWorld
     {

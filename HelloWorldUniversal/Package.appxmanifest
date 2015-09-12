@@ -30,7 +30,7 @@
   <Applications>
     <Application Id="App"
       Executable="$targetnametoken$.exe"
-      EntryPoint="HelloWorldUniversal.App">
+      EntryPoint="HelloWorldShared.App">
       <uap:VisualElements
         DisplayName="HelloWorldUniversal"
         Square150x150Logo="Assets\Square150x150Logo.png"

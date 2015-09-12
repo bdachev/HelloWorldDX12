@@ -9,7 +9,7 @@ using Windows.Graphics.Imaging;
 using Windows.Storage;
 using Windows.UI.Xaml.Controls;
 
-namespace HelloWorld
+namespace HelloWorldShared
 {
     public partial class HelloWorld
     {
@@ -43,24 +43,23 @@ namespace HelloWorld
 
             public TextureLoader(string fileName)
             {
-                _bitmapData = LoadFrameAsync(fileName).Result;
+                Windows.System.Threading.ThreadPool.RunAsync(wi => _bitmapData = LoadFrameAsync(fileName).Result).AsTask().Wait();
             }
 
             async Task<byte[]> LoadFrameAsync(string fileName)
             {
-                var file = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///" + fileName)).AsTask().ConfigureAwait(false);
-                using (var stream = await file.OpenReadAsync().AsTask().ConfigureAwait(false))
+                var file = await StorageFile.GetFileFromApplicationUriAsync(new Uri("ms-appx:///" + fileName));
+                using (var stream = await file.OpenReadAsync())
                 {
-                    var decoder = await BitmapDecoder.CreateAsync(stream).AsTask().ConfigureAwait(false);
+                    var decoder = await BitmapDecoder.CreateAsync(stream);
                     Width = (int)decoder.PixelWidth;
                     Height = (int)decoder.PixelHeight;
                     var data = decoder.BitmapPixelFormat == BitmapPixelFormat.Bgra8 ?
-                                    await decoder.GetPixelDataAsync().AsTask().ConfigureAwait(false) :
-                                    await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, new BitmapTransform(), ExifOrientationMode.RespectExifOrientation, ColorManagementMode.ColorManageToSRgb).AsTask().ConfigureAwait(false);
+                                    await decoder.GetPixelDataAsync() :
+                                    await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, new BitmapTransform(), ExifOrientationMode.RespectExifOrientation, ColorManagementMode.ColorManageToSRgb);
                     return data.DetachPixelData();
                 }
             }
-
 
             public int CopyImageData(IntPtr ptrBuf)
             {

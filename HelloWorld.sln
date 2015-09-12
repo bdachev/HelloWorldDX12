@@ -7,7 +7,16 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloWorld", "HelloWorld\He
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloWorldUniversal", "HelloWorldUniversal\HelloWorldUniversal.csproj", "{DC3F9DA8-F5BF-41A1-AB1A-D66DCF34F4F9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HelloWorldWin81", "HelloWorldWin81\HelloWorldWin81.csproj", "{EFF9310B-8463-4FFE-9F28-479C1FF1560F}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "HelloWorldShared", "HelloWorldShared\HelloWorldShared.shproj", "{EE8435A1-66C0-4EDC-B11F-B18260E979DE}"
+EndProject
 Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		HelloWorldShared\HelloWorldShared.projitems*{dc3f9da8-f5bf-41a1-ab1a-d66dcf34f4f9}*SharedItemsImports = 4
+		HelloWorldShared\HelloWorldShared.projitems*{eff9310b-8463-4ffe-9f28-479c1ff1560f}*SharedItemsImports = 4
+		HelloWorldShared\HelloWorldShared.projitems*{ee8435a1-66c0-4edc-b11f-b18260e979de}*SharedItemsImports = 13
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Debug|ARM = Debug|ARM
@@ -59,6 +68,30 @@ Global
 		{DC3F9DA8-F5BF-41A1-AB1A-D66DCF34F4F9}.Release|x86.ActiveCfg = Release|x86
 		{DC3F9DA8-F5BF-41A1-AB1A-D66DCF34F4F9}.Release|x86.Build.0 = Release|x86
 		{DC3F9DA8-F5BF-41A1-AB1A-D66DCF34F4F9}.Release|x86.Deploy.0 = Release|x86
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|ARM.ActiveCfg = Debug|ARM
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|ARM.Build.0 = Debug|ARM
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|ARM.Deploy.0 = Debug|ARM
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|x64.ActiveCfg = Debug|x64
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|x64.Build.0 = Debug|x64
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|x64.Deploy.0 = Debug|x64
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|x86.ActiveCfg = Debug|x86
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|x86.Build.0 = Debug|x86
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Debug|x86.Deploy.0 = Debug|x86
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|ARM.ActiveCfg = Release|ARM
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|ARM.Build.0 = Release|ARM
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|ARM.Deploy.0 = Release|ARM
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|x64.ActiveCfg = Release|x64
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|x64.Build.0 = Release|x64
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|x64.Deploy.0 = Release|x64
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|x86.ActiveCfg = Release|x86
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|x86.Build.0 = Release|x86
+		{EFF9310B-8463-4FFE-9F28-479C1FF1560F}.Release|x86.Deploy.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
