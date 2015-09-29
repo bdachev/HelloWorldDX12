@@ -17,7 +17,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-#define USE_TEXTURE
+#ifdef USE_TEXTURE
 #define MyRS1 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
               "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
               "DescriptorTable( SRV(t0, numDescriptors = 1), " \
@@ -25,12 +25,19 @@
               "DescriptorTable( Sampler(s0, numDescriptors = 1), " \
 							  " visibility = SHADER_VISIBILITY_PIXEL), " \
 
+#else
+#define MyRS1 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
+              "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
+
+#endif
 struct VS_IN
 {
 	float3 pos : POSITION;
 	float3 normal : NORMAL;
 	float2 tex : TEXCOORD;
+#ifdef USE_INSTANCES
 	float3 offset : OFFSET;
+#endif
 };
 
 struct PS_IN
@@ -55,8 +62,11 @@ PS_IN VS( VS_IN input )
 {
 	PS_IN output = (PS_IN)0;
 	
-	//output.pos = mul(float4(input.pos, 1.0f), WorldViewProj);
+#ifdef USE_INSTANCES
 	output.pos = mul(float4(input.pos + input.offset, 1.0f), WorldViewProj);
+#else
+	output.pos = mul(float4(input.pos, 1.0f), WorldViewProj);
+#endif
 	output.tex = input.tex;
 	
 	return output;

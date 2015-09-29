@@ -40,6 +40,19 @@ namespace HelloWorldShared
     /// </summary>
     public partial class HelloWorld : DisposeCollector
     {
+#if USE_TEXTURE
+#if USE_INSTANCES
+        const string shaderNameSuffix = "_TI";
+#else
+        const string shaderNameSuffix = "_T";
+#endif
+#else
+#if USE_INSTANCES
+        const string shaderNameSuffix = "_I";
+#else
+        const string shaderNameSuffix = "_N";
+#endif
+#endif
         private const int SwapBufferCount = 3;
 
         private int width, newWidth;
@@ -273,12 +286,12 @@ namespace HelloWorldShared
             var rs = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rsparams);
             rootSignature = Collect(device.CreateRootSignature(rs.Serialize()));
 #else
-            var rootSignatureByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube.rs"));
+            var rootSignatureByteCode = Utilities.ReadStream(assembly.GetManifestResourceStream("Shaders.Cube" + shaderNameSuffix + ".rs"));
             using (var bufferRootSignature = DataBuffer.Create(rootSignatureByteCode))
                 rootSignature = Collect(device.CreateRootSignature(bufferRootSignature));
 #endif
-            byte[] vertexShaderByteCode = GetResourceBytes("Cube.vso");
-            byte[] pixelShaderByteCode = GetResourceBytes("Cube.pso");
+            byte[] vertexShaderByteCode = GetResourceBytes("Cube" + shaderNameSuffix + ".vso");
+            byte[] pixelShaderByteCode = GetResourceBytes("Cube" + shaderNameSuffix + ".pso");
 
             var layout = new InputLayoutDescription(new InputElement[]
             {
@@ -515,7 +528,7 @@ namespace HelloWorldShared
             device.CreateShaderResourceView(texture, null, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
 #endregion texture
 
-                #region sampler
+#region sampler
             device.CreateSampler(new SamplerStateDescription
             {
                 AddressU = TextureAddressMode.Wrap,
@@ -523,7 +536,7 @@ namespace HelloWorldShared
                 AddressW = TextureAddressMode.Wrap,
                 Filter = Filter.MaximumMinMagMipLinear,
             }, descriptorHeapS.CPUDescriptorHandleForHeapStart);
-                #endregion sampler
+#endregion sampler
 #endif
                 // Get the backbuffer and creates the render target view
                 renderTarget = Collect(swapChain.GetBackBuffer<Resource>(0));
@@ -625,7 +638,7 @@ namespace HelloWorldShared
 #endif
 #else
 #if USE_INDICES
-            commandList.IndexBuffer = indexBufferView;
+            commandList.SetIndexBuffer(indexBufferView);
             commandList.DrawIndexedInstanced(34, 1, 0, 0, 0);
 #else
             commandList.DrawInstanced(34, 1, 0, 0);

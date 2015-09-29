@@ -56,15 +56,6 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
-  <PropertyGroup>
-    <Windows10KitsPath>$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot10)</Windows10KitsPath>
-    <FXC10_EXE Condition=" '$(Windows10KitsPath)' != '' And Exists('$(Windows10KitsPath)bin\x86\fxc.exe') ">$(Windows10KitsPath)bin\x86\fxc.exe</FXC10_EXE>
-    <Windows81KitsPath>$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot81)</Windows81KitsPath>
-    <Windows8KitsPath>$(registry:HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows Kits\Installed Roots@KitsRoot)</Windows8KitsPath>
-    <FXC_EXE>$(FXC10_EXE)</FXC_EXE>
-    <FXC_EXE Condition=" '$(FXC_EXE)' == '' And '$(Windows81KitsPath)' != '' And Exists('$(Windows81KitsPath)bin\x86\fxc.exe') ">$(Windows81KitsPath)bin\x86\fxc.exe</FXC_EXE>
-    <FXC_EXE Condition=" '$(FXC_EXE)' == '' And '$(Windows8KitsPath)' != '' And Exists('$(Windows8KitsPath)bin\x86\fxc.exe') ">$(Windows8KitsPath)bin\x86\fxc.exe</FXC_EXE>
-  </PropertyGroup>
   <ItemGroup>
     <Reference Include="SharpDX, Version=3.0.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
       <HintPath>..\packages\SharpDX.3.0.0-beta01\lib\net45\SharpDX.dll</HintPath>
@@ -101,37 +92,22 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ShaderCode Include="Cube.fx" />
-  </ItemGroup>
-  <ItemGroup>
-    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.vso">
-      <Source>Cube.fx</Source>
-      <SType>vs_5_0</SType>
-      <SEntry>VS</SEntry>
-      <Visible>false</Visible>
-    </ShaderOutput>
-    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.pso">
-      <Source>Cube.fx</Source>
-      <SType>ps_5_0</SType>
-      <SEntry>PS</SEntry>
-      <Visible>false</Visible>
-    </ShaderOutput>
-    <ShaderOutput Include="$(IntermediateOutputPath)\Cube.rs" Condition=" '$(FXC10_EXE)' != '' ">
-      <Source>Cube.fx</Source>
-      <SType>rootsig_1_0</SType>
-      <SEntry>MyRS1</SEntry>
-      <Visible>false</Visible>
-    </ShaderOutput>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="GeneticaMortarlessBlocks.jpg">
+    <ShaderCode Include="..\HelloWorldShared\Cube.fx">
+      <Link>Cube.fx</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    </ShaderCode>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\HelloWorldShared\GeneticaMortarlessBlocks.jpg">
+      <Link>GeneticaMortarlessBlocks.jpg</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="..\HelloWorldShared\CompileShaders.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
@@ -139,20 +115,4 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-  <Target Name="BuildShaders" Inputs="@(ShaderCode)" Outputs="@(ShaderOutput)">
-    <Exec Outputs="%(ShaderOutput.Identity)" Command="&quot;$(FXC_EXE)&quot; /nologo /Fc &quot;%(ShaderOutput.Identity).asm&quot; /Fo &quot;%(ShaderOutput.Identity)&quot; /T %(ShaderOutput.SType) /E %(ShaderOutput.SEntry) %(ShaderOutput.Defines) /O3 &quot;%(ShaderOutput.Source)&quot;" />
-    <ItemGroup>
-      <EmbeddedResource Include="@(ShaderOutput)">
-        <LogicalName>Shaders.%(Filename)%(Extension)</LogicalName>
-        <Type>Non-Resx</Type>
-      </EmbeddedResource>
-    </ItemGroup>
-  </Target>
-  <Target Name="CleanShaders">
-    <Delete Files="@(ShaderOutput)" />
-  </Target>
-  <PropertyGroup>
-    <BuildDependsOn>BuildShaders;$(BuildDependsOn)</BuildDependsOn>
-    <CleanDependsOn>CleanShaders;$(CleanDependsOn)</CleanDependsOn>
-  </PropertyGroup>
 </Project>

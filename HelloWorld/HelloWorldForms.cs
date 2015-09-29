@@ -3,6 +3,7 @@ using SharpDX.DXGI;
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 using Rectangle = System.Drawing.Rectangle;
@@ -66,7 +67,7 @@ namespace HelloWorldShared
 
         byte[] GetResourceBytes(string name)
         {
-            using (var stream = typeof(HelloWorld).Assembly.GetManifestResourceStream("Shaders." + name))
+            using (var stream = new FileStream(Path.Combine(Path.GetDirectoryName(typeof(HelloWorld).Assembly.Location), "Shaders", name), FileMode.Open, FileAccess.Read))
                 return Utilities.ReadStream(stream);
         }
 
