@@ -19,9 +19,9 @@
 // THE SOFTWARE.
 #define USE_WARP
 #define USE_DEPTH
-#define USE_INSTANCES
+//#define USE_INSTANCES
 #define USE_INDICES
-#define USE_TEXTURE
+//#define USE_TEXTURE
 
 using SharpDX;
 using SharpDX.Direct3D;
@@ -53,6 +53,7 @@ namespace HelloWorldShared
         const string shaderNameSuffix = "_N";
 #endif
 #endif
+        private readonly int sizeOfMatrix = (Utilities.SizeOf<Matrix>() + 255) & ~255;
         private const int SwapBufferCount = 3;
 
         private int width, newWidth;
@@ -79,6 +80,16 @@ namespace HelloWorldShared
         private Resource indexBuffer;
         private IndexBufferView indexBufferView;
 #endif
+        private float[] instances = new float[]
+        {
+            0,  0,  0,
+            4,  0,  0,
+            -4,  0,  0,
+            0,  4,  0,
+            0, -4,  0,
+            0,  0,  4,
+            0,  0, -4,
+        };
 #if USE_INSTANCES
         private Resource instancesBuffer;
         private VertexBufferView[] instancesBufferView;
@@ -87,9 +98,14 @@ namespace HelloWorldShared
         private DescriptorHeap[] descriptorsHeaps = new DescriptorHeap[2];
         private DescriptorHeap descriptorHeapCB;
         private DescriptorHeap descriptorHeapS;
+        private int descrOffsetCB;
         private Resource texture;
+#else
+        private DescriptorHeap[] descriptorsHeaps = new DescriptorHeap[1];
+        private DescriptorHeap descriptorHeapCB;
 #endif
-        private Resource transform;
+        private Resource transWorld, transViewProj;
+        private IntPtr transWorldPtr;
         private long currentFence;
         private readonly Stopwatch clock;
 
@@ -250,7 +266,7 @@ namespace HelloWorldShared
             descriptorHeapCB = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
             {
                 Type = DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
-                DescriptorCount = 1,
+                DescriptorCount = 2,
                 Flags = DescriptorHeapFlags.ShaderVisible,
             }));
             descriptorHeapS = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
@@ -261,11 +277,26 @@ namespace HelloWorldShared
             }));
             descriptorsHeaps[0] = descriptorHeapCB;
             descriptorsHeaps[1] = descriptorHeapS;
+#else
+            descriptorHeapCB = Collect(device.CreateDescriptorHeap(new DescriptorHeapDescription()
+            {
+                Type = DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView,
+                DescriptorCount = 1,
+                Flags = DescriptorHeapFlags.ShaderVisible,
+            }));
+            descriptorsHeaps[0] = descriptorHeapCB;
 #endif
 #if true // root signature in code 
             var rsparams = new RootParameter[]
             {
                 new RootParameter(ShaderVisibility.Vertex, new RootDescriptor(), RootParameterType.ConstantBufferView),
+                new RootParameter(ShaderVisibility.Vertex,
+                    new DescriptorRange
+                    {
+                        RangeType = DescriptorRangeType.ConstantBufferView,
+                        BaseShaderRegister = 1,
+                        DescriptorCount = 1,
+                    }),
 #if USE_TEXTURE
                 new RootParameter(ShaderVisibility.Pixel,
                     new DescriptorRange
@@ -398,16 +429,6 @@ namespace HelloWorldShared
 #endregion vertex buffer
 #region instances
 #if USE_INSTANCES
-            var instances = new float[]
-            {
-                0,  0,  0,
-                4,  0,  0,
-               -4,  0,  0,
-                0,  4,  0,
-                0, -4,  0,
-                0,  0,  4,
-                0,  0, -4,
-            };
             int instanceSizeInBytes = sizeOfFloat * instances.Length;
             instancesBuffer = Collect(device.CreateCommittedResource(
                             new HeapProperties(HeapType.Upload),
@@ -456,18 +477,37 @@ namespace HelloWorldShared
                  Format = Format.R32_UInt
             };
 #endif
-#endregion indices
+            #endregion indices
 
-#region transform
-            transform = Collect(device.CreateCommittedResource(
-                            new HeapProperties(HeapType.Upload),
-                            HeapFlags.None,
-                            new ResourceDescription(ResourceDimension.Buffer, 0, Utilities.SizeOf<Matrix>(), 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
-                            ResourceStates.GenericRead));
-#endregion transform
+            #region transform
+            transWorld = Collect(device.CreateCommittedResource(
+                                new HeapProperties(HeapType.Upload),
+                                HeapFlags.None,
+                                new ResourceDescription(ResourceDimension.Buffer, 0, 16 * sizeOfMatrix, 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
+                                ResourceStates.GenericRead));
+            transWorldPtr = transWorld.Map(0);
+            transViewProj = Collect(device.CreateCommittedResource(
+                                new HeapProperties(HeapType.Upload),
+                                HeapFlags.None,
+                                new ResourceDescription(ResourceDimension.Buffer, 0, sizeOfMatrix, 1, 1, 1, Format.Unknown, 1, 0, TextureLayout.RowMajor, ResourceFlags.None),
+                                ResourceStates.GenericRead));
+            device.CreateConstantBufferView(new ConstantBufferViewDescription
+            {
+                BufferLocation = transViewProj.GPUVirtualAddress,
+                SizeInBytes = sizeOfMatrix,
+            }, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
+
+            var view = Matrix.LookAtLH(new Vector3(5, 5, -5), Vector3.Zero, Vector3.UnitY);
+            var proj = Matrix.PerspectiveFovLH(MathUtil.Pi / 4, (float)width / height, 0.1f, 100);
+            var vpT = view * proj;
+            vpT.Transpose();
+            ptr = transViewProj.Map(0);
+            Utilities.Write(ptr, ref vpT);
+            transViewProj.Unmap(0);
+            #endregion transform
 
 #if USE_TEXTURE
-#region texture
+            #region texture
             Resource buf;
             using (var tl = new TextureLoader("GeneticaMortarlessBlocks.jpg"))
             {
@@ -525,10 +565,11 @@ namespace HelloWorldShared
 
                 commandList.ResourceBarrierTransition(texture, ResourceStates.CopyDestination, ResourceStates.GenericRead);
             }
-            device.CreateShaderResourceView(texture, null, descriptorHeapCB.CPUDescriptorHandleForHeapStart);
-#endregion texture
+            descrOffsetCB = device.GetDescriptorHandleIncrementSize(DescriptorHeapType.ConstantBufferViewShaderResourceViewUnorderedAccessView);
+            device.CreateShaderResourceView(texture, null, descriptorHeapCB.CPUDescriptorHandleForHeapStart + descrOffsetCB);
+            #endregion texture
 
-#region sampler
+            #region sampler
             device.CreateSampler(new SamplerStateDescription
             {
                 AddressU = TextureAddressMode.Wrap,
@@ -536,7 +577,7 @@ namespace HelloWorldShared
                 AddressW = TextureAddressMode.Wrap,
                 Filter = Filter.MaximumMinMagMipLinear,
             }, descriptorHeapS.CPUDescriptorHandleForHeapStart);
-#endregion sampler
+            #endregion sampler
 #endif
                 // Get the backbuffer and creates the render target view
                 renderTarget = Collect(swapChain.GetBackBuffer<Resource>(0));
@@ -598,21 +639,17 @@ namespace HelloWorldShared
             // setup viewport and scissors
             commandList.SetViewport(viewPort);
             commandList.SetScissorRectangles(scissorRectangle);
-            var view = Matrix.LookAtLH(new Vector3(0, 0, -5), Vector3.Zero, Vector3.UnitY);
-            var proj = Matrix.PerspectiveFovLH(MathUtil.Pi / 4, (float)width / height, 0.1f, 100);
-            var world = Matrix.Scaling(0.3f) * Matrix.RotationY((float)time) * Matrix.RotationX((float)time / 2);
-            var wvpT = world * view * proj;
-            wvpT.Transpose();
-            var ptr = transform.Map(0);
-            Utilities.Write(ptr, ref wvpT);
-            transform.Unmap(0);
-            //commandList.PipelineState = pipelineState;
+
             commandList.SetGraphicsRootSignature(rootSignature);
-            commandList.SetGraphicsRootConstantBufferView(0, transform.GPUVirtualAddress);
+
 #if USE_TEXTURE
             commandList.SetDescriptorHeaps(2, descriptorsHeaps);
             commandList.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
-            commandList.SetGraphicsRootDescriptorTable(2, descriptorHeapS.GPUDescriptorHandleForHeapStart);
+            commandList.SetGraphicsRootDescriptorTable(2, descriptorHeapCB.GPUDescriptorHandleForHeapStart + descrOffsetCB);
+            commandList.SetGraphicsRootDescriptorTable(3, descriptorHeapS.GPUDescriptorHandleForHeapStart);
+#else
+            commandList.SetDescriptorHeaps(1, descriptorsHeaps);
+            commandList.SetGraphicsRootDescriptorTable(1, descriptorHeapCB.GPUDescriptorHandleForHeapStart);
 #endif
             // Use barrier to notify that we are using the RenderTarget to clear it
             commandList.ResourceBarrierTransition(renderTarget, ResourceStates.Present, ResourceStates.RenderTarget);
@@ -629,6 +666,12 @@ namespace HelloWorldShared
             commandList.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
             commandList.SetVertexBuffers(0, vertexBufferView, 1);
 #if USE_INSTANCES
+
+            var world = Matrix.Scaling(0.3f) * Matrix.RotationY((float)time) * Matrix.RotationX((float)time / 2);
+            world.Transpose();
+            Utilities.Write(transWorldPtr, ref world);
+            commandList.SetGraphicsRootConstantBufferView(0, transWorld.GPUVirtualAddress);
+
             commandList.SetVertexBuffers(1, instancesBufferView, 1);
 #if USE_INDICES
             commandList.SetIndexBuffer(indexBufferView);
@@ -636,13 +679,25 @@ namespace HelloWorldShared
 #else
             commandList.DrawInstanced(34, 7, 0, 0);
 #endif
-#else
+#else // no instances
+            for (int i = 0; i < 7; i++)
+            {
+                var world = Matrix.Scaling(0.3f) *
+                            Matrix.RotationY((float)time) *
+                            Matrix.RotationX((float)time / 2) *
+                            Matrix.Translation(instances[3 * i] / 3, instances[3 * i + 1] / 3, instances[3 * i + 2] / 3);
+                world.Transpose();
+                int offset = i * sizeOfMatrix;
+                Utilities.Write(transWorldPtr + offset, ref world);
+                commandList.SetGraphicsRootConstantBufferView(0, transWorld.GPUVirtualAddress + offset);
+
 #if USE_INDICES
-            commandList.SetIndexBuffer(indexBufferView);
-            commandList.DrawIndexedInstanced(34, 1, 0, 0, 0);
+                commandList.SetIndexBuffer(indexBufferView);
+                commandList.DrawIndexedInstanced(34, 1, 0, 0, 0);
 #else
-            commandList.DrawInstanced(34, 1, 0, 0);
+                commandList.DrawInstanced(34, 1, 0, 0);
 #endif
+            }
 #endif
 
             // Use barrier to notify that we are going to present the RenderTarget

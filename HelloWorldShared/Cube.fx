@@ -20,6 +20,8 @@
 #ifdef USE_TEXTURE
 #define MyRS1 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
               "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
+              "DescriptorTable( CBV(b1, numDescriptors = 1), " \
+							  " visibility = SHADER_VISIBILITY_VERTEX), " \
               "DescriptorTable( SRV(t0, numDescriptors = 1), " \
 							  " visibility = SHADER_VISIBILITY_PIXEL), " \
               "DescriptorTable( Sampler(s0, numDescriptors = 1), " \
@@ -28,6 +30,8 @@
 #else
 #define MyRS1 "RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT), " \
               "CBV(b0, visibility = SHADER_VISIBILITY_VERTEX), " \
+              "DescriptorTable( CBV(b1, numDescriptors = 1), " \
+							  " visibility = SHADER_VISIBILITY_VERTEX), " \
 
 #endif
 struct VS_IN
@@ -49,7 +53,12 @@ struct PS_IN
 
 cbuffer worldMatrix : register(b0)
 {
-	float4x4 WorldViewProj;
+	float4x4 World;
+};
+
+cbuffer viewProjMatrix : register(b1)
+{
+	float4x4 ViewProj;
 };
 
 #ifdef USE_TEXTURE
@@ -63,10 +72,11 @@ PS_IN VS( VS_IN input )
 	PS_IN output = (PS_IN)0;
 	
 #ifdef USE_INSTANCES
-	output.pos = mul(float4(input.pos + input.offset, 1.0f), WorldViewProj);
+	output.pos = mul(float4(input.pos + input.offset, 1.0f), World);
 #else
-	output.pos = mul(float4(input.pos, 1.0f), WorldViewProj);
+	output.pos = mul(float4(input.pos, 1.0f), World);
 #endif
+	output.pos = mul(output.pos, ViewProj);
 	output.tex = input.tex;
 	
 	return output;
