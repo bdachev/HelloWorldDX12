@@ -1,8 +1,8 @@
 ﻿{
   "dependencies": {
     "Microsoft.NETCore.UniversalWindowsPlatform": "5.0.0",
-    "SharpDX.Direct3D12": "3.0.0-beta01",
-    "SharpDX.Mathematics": "3.0.0-beta01"
+    "SharpDX.Direct3D12": "3.0.1",
+    "SharpDX.Mathematics": "3.0.1"
   },
   "frameworks": {
     "uap10.0": {}

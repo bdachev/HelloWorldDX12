@@ -659,9 +659,9 @@ namespace HelloWorldShared
             commandList.ClearRenderTargetView(descriptorHeapRT.CPUDescriptorHandleForHeapStart, new Color4((float)Math.Sin(time) * 0.25f + 0.5f, (float)Math.Sin(time * 0.5f) * 0.4f + 0.6f, 0.4f, 1.0f), 0, null);
 #if USE_DEPTH
             commandList.ClearDepthStencilView(descriptorHeapDS.CPUDescriptorHandleForHeapStart, ClearFlags.FlagsDepth, 1, 0, 0, null);
-            commandList.SetRenderTargets(1, descriptorHeapRT.CPUDescriptorHandleForHeapStart, true, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
+            commandList.SetRenderTargets(descriptorHeapRT.CPUDescriptorHandleForHeapStart, descriptorHeapDS.CPUDescriptorHandleForHeapStart);
 #else
-            commandList.SetRenderTargets(1, descriptorHeapRT.CPUDescriptorHandleForHeapStart, true, null);
+            commandList.SetRenderTargets(descriptorHeapRT.CPUDescriptorHandleForHeapStart, null);
 #endif
             commandList.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
             commandList.SetVertexBuffers(0, vertexBufferView, 1);
