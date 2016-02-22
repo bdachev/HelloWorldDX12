@@ -31,7 +31,7 @@
     </Page>
   </ItemGroup>
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)Cube.fx" />
+    <ShaderCode Include="$(MSBuildThisFileDirectory)Cube.fx" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="$(MSBuildThisFileDirectory)GeneticaMortarlessBlocks.jpg">
