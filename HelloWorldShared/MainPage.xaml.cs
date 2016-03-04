@@ -23,7 +23,6 @@ namespace HelloWorldShared
     public sealed partial class MainPage : Page
     {
         HelloWorld _helloWorld;
-        DispatcherTimer _timer;
 
         void UpdateAndRender()
         {
@@ -46,26 +45,24 @@ namespace HelloWorldShared
                 {
                     _helloWorld.Resize((int)__SwapChainPanel.ActualWidth, (int)__SwapChainPanel.ActualHeight);
                 };
-
-                _timer = new DispatcherTimer();
-                _timer.Interval = TimeSpan.FromMilliseconds(10);
-                _timer.Tick += (o1, e1) => UpdateAndRender();
-                _timer.Start();
+                CompositionTarget.Rendering += CompositionTarget_Rendering;
             };
 
             Unloaded += (o, e) =>
             {
-                if (_timer != null)
-                {
-                    _timer.Stop();
-                    _timer = null;
-                }
+                CompositionTarget.Rendering -= CompositionTarget_Rendering;
+
                 if (_helloWorld != null)
                 {
                     _helloWorld.Dispose();
                     _helloWorld = null;
                 }
             };
+        }
+
+        private void CompositionTarget_Rendering(object sender, object e)
+        {
+            UpdateAndRender();
         }
     }
 }
