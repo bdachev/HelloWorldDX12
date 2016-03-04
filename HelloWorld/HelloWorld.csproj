@@ -98,9 +98,6 @@
     </ShaderCode>
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
     <Content Include="..\HelloWorldShared\GeneticaMortarlessBlocks.jpg">
       <Link>GeneticaMortarlessBlocks.jpg</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
